@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sudoku</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Sudoku</h1>
+      <div class="status">
+        <span id="timer">00:00</span>
+        <span id="mistakes">Mistakes: 0</span>
+      </div>
+    </header>
+
+    <div class="controls">
+      <select id="difficulty" aria-label="Difficulty">
+        <option value="easy">Easy</option>
+        <option value="medium" selected>Medium</option>
+        <option value="hard">Hard</option>
+      </select>
+      <button id="new-game">New game</button>
+    </div>
+
+    <div id="board" role="grid" aria-label="Sudoku board"></div>
+
+    <div class="numpad" id="numpad"></div>
+
+    <div class="controls">
+      <button id="notes-toggle" aria-pressed="false">Notes: off</button>
+      <button id="erase">Erase</button>
+      <button id="hint">Hint</button>
+      <button id="check">Check</button>
+      <button id="solve">Solve</button>
+    </div>
+
+    <p id="message" role="status"></p>
+  </main>
+
+  <script src="sudoku.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
