@@ -1,6 +1,8 @@
 (function () {
   'use strict';
 
+  const SAVE_KEY = 'sudoku-save-v1';
+
   const boardEl = document.getElementById('board');
   const numpadEl = document.getElementById('numpad');
   const messageEl = document.getElementById('message');
@@ -8,19 +10,24 @@
   const mistakesEl = document.getElementById('mistakes');
   const difficultyEl = document.getElementById('difficulty');
   const notesBtn = document.getElementById('notes-toggle');
+  const notesStateEl = document.getElementById('notes-state');
 
   const state = {
     puzzle: [],
     solution: [],
     board: [],
     notes: [],
+    history: [],
     selected: -1,
     notesMode: false,
     mistakes: 0,
-    startTime: 0,
-    timerId: null,
+    elapsed: 0,      // ms accumulated before the current run
+    runStart: 0,     // timestamp the timer last resumed, 0 when paused
     finished: false,
+    difficulty: 'medium',
   };
+
+  // ---------- Build the board and number pad ----------
 
   const cells = [];
   for (let i = 0; i < 81; i++) {
@@ -39,14 +46,109 @@
   for (let n = 1; n <= 9; n++) {
     const btn = document.createElement('button');
     btn.textContent = n;
+    btn.setAttribute('aria-label', `Enter ${n}`);
     btn.addEventListener('click', () => input(n));
     numpadEl.appendChild(btn);
   }
+
+  // ---------- Helpers ----------
 
   function setMessage(text, cls) {
     messageEl.textContent = text;
     messageEl.className = cls || '';
   }
+
+  function buzz(pattern) {
+    if (navigator.vibrate) navigator.vibrate(pattern);
+  }
+
+  function isGiven(i) {
+    return state.puzzle[i] !== 0;
+  }
+
+  function sameUnit(a, b) {
+    const ra = Math.floor(a / 9), ca = a % 9;
+    const rb = Math.floor(b / 9), cb = b % 9;
+    return ra === rb || ca === cb ||
+      (Math.floor(ra / 3) === Math.floor(rb / 3) && Math.floor(ca / 3) === Math.floor(cb / 3));
+  }
+
+  // ---------- Timer (pauses while the app is in the background) ----------
+
+  function elapsedMs() {
+    return state.elapsed + (state.runStart ? Date.now() - state.runStart : 0);
+  }
+
+  function startTimer() {
+    if (!state.runStart && !state.finished) state.runStart = Date.now();
+  }
+
+  function pauseTimer() {
+    if (state.runStart) {
+      state.elapsed += Date.now() - state.runStart;
+      state.runStart = 0;
+    }
+  }
+
+  function formatTime(ms) {
+    const secs = Math.floor(ms / 1000);
+    const m = String(Math.floor(secs / 60)).padStart(2, '0');
+    const s = String(secs % 60).padStart(2, '0');
+    return `${m}:${s}`;
+  }
+
+  setInterval(() => { timerEl.textContent = formatTime(elapsedMs()); }, 500);
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      pauseTimer();
+      save();
+    } else {
+      startTimer();
+    }
+  });
+  window.addEventListener('pagehide', save);
+
+  // ---------- Saving progress ----------
+
+  function save() {
+    if (!state.puzzle.length) return;
+    try {
+      localStorage.setItem(SAVE_KEY, JSON.stringify({
+        puzzle: state.puzzle,
+        solution: state.solution,
+        board: state.board,
+        notes: state.notes.map((s) => [...s]),
+        mistakes: state.mistakes,
+        elapsed: elapsedMs(),
+        finished: state.finished,
+        difficulty: state.difficulty,
+      }));
+    } catch (e) { /* storage unavailable: progress just isn't kept */ }
+  }
+
+  function load() {
+    try {
+      const data = JSON.parse(localStorage.getItem(SAVE_KEY));
+      if (!data || data.puzzle.length !== 81) return false;
+      state.puzzle = data.puzzle;
+      state.solution = data.solution;
+      state.board = data.board;
+      state.notes = data.notes.map((a) => new Set(a));
+      state.mistakes = data.mistakes;
+      state.elapsed = data.elapsed;
+      state.finished = data.finished;
+      state.difficulty = data.difficulty;
+      state.history = [];
+      state.runStart = 0;
+      difficultyEl.value = data.difficulty;
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // ---------- Game flow ----------
 
   function newGame() {
     setMessage('Generating…');
@@ -57,23 +159,22 @@
       state.solution = solution;
       state.board = puzzle.slice();
       state.notes = Array.from({ length: 81 }, () => new Set());
+      state.history = [];
       state.selected = -1;
       state.mistakes = 0;
       state.finished = false;
-      state.startTime = Date.now();
-      clearInterval(state.timerId);
-      state.timerId = setInterval(updateTimer, 1000);
-      updateTimer();
+      state.difficulty = difficultyEl.value;
+      state.elapsed = 0;
+      state.runStart = 0;
+      startTimer();
       setMessage('');
       render();
-    }, 10);
+      save();
+    }, 20);
   }
 
-  function updateTimer() {
-    const secs = Math.floor((Date.now() - state.startTime) / 1000);
-    const m = String(Math.floor(secs / 60)).padStart(2, '0');
-    const s = String(secs % 60).padStart(2, '0');
-    timerEl.textContent = `${m}:${s}`;
+  function inProgress() {
+    return !state.finished && state.board.some((v, i) => v !== state.puzzle[i]);
   }
 
   function select(i) {
@@ -81,49 +182,64 @@
     render();
   }
 
-  function isGiven(i) {
-    return state.puzzle[i] !== 0;
+  function pushHistory(i) {
+    state.history.push({ i, value: state.board[i], notes: [...state.notes[i]] });
+    if (state.history.length > 200) state.history.shift();
   }
 
   function input(n) {
     const i = state.selected;
-    if (i < 0 || state.finished || isGiven(i)) return;
+    if (i < 0) return setMessage('Tap a square first.');
+    if (state.finished || isGiven(i)) return;
 
     if (state.notesMode) {
       if (state.board[i] !== 0) return;
+      pushHistory(i);
       const notes = state.notes[i];
       notes.has(n) ? notes.delete(n) : notes.add(n);
     } else {
       if (state.board[i] === n) return;
+      pushHistory(i);
       state.board[i] = n;
       state.notes[i].clear();
       if (n !== state.solution[i]) {
         state.mistakes++;
+        buzz(80);
       } else {
         clearRelatedNotes(i, n);
       }
     }
+    setMessage('');
     render();
     checkWin();
+    save();
   }
 
   function clearRelatedNotes(i, n) {
-    const row = Math.floor(i / 9);
-    const col = i % 9;
-    for (let j = 0; j < 81; j++) {
-      const r = Math.floor(j / 9);
-      const c = j % 9;
-      const sameBox = Math.floor(r / 3) === Math.floor(row / 3) && Math.floor(c / 3) === Math.floor(col / 3);
-      if (r === row || c === col || sameBox) state.notes[j].delete(n);
-    }
+    for (let j = 0; j < 81; j++) if (sameUnit(i, j)) state.notes[j].delete(n);
   }
 
   function erase() {
     const i = state.selected;
     if (i < 0 || state.finished || isGiven(i)) return;
+    if (state.board[i] === 0 && state.notes[i].size === 0) return;
+    pushHistory(i);
     state.board[i] = 0;
     state.notes[i].clear();
     render();
+    save();
+  }
+
+  function undo() {
+    if (state.finished) return;
+    const last = state.history.pop();
+    if (!last) return setMessage('Nothing to undo.');
+    state.board[last.i] = last.value;
+    state.notes[last.i] = new Set(last.notes);
+    state.selected = last.i;
+    setMessage('');
+    render();
+    save();
   }
 
   function hint() {
@@ -135,22 +251,27 @@
       if (!candidates.length) return;
       i = candidates[Math.floor(Math.random() * candidates.length)];
     }
+    pushHistory(i);
     state.board[i] = state.solution[i];
     state.notes[i].clear();
     clearRelatedNotes(i, state.solution[i]);
     state.selected = i;
     render();
     checkWin();
+    save();
   }
 
   function check() {
+    if (state.finished) return;
     const wrong = state.board.filter((v, i) => v !== 0 && v !== state.solution[i]).length;
     const empty = state.board.filter((v) => v === 0).length;
-    if (wrong) setMessage(`${wrong} incorrect cell${wrong > 1 ? 's' : ''}.`, 'bad');
-    else setMessage(`Looking good! ${empty} cell${empty === 1 ? '' : 's'} left.`);
+    if (wrong) setMessage(`${wrong} incorrect square${wrong > 1 ? 's' : ''}.`, 'bad');
+    else setMessage(`Looking good! ${empty} square${empty === 1 ? '' : 's'} left.`);
   }
 
   function solveAll() {
+    if (state.finished) return;
+    if (!confirm('Reveal the solution? This ends the current game.')) return;
     state.board = state.solution.slice();
     state.notes.forEach((s) => s.clear());
     finish(false);
@@ -161,31 +282,38 @@
   }
 
   function finish(won) {
+    pauseTimer();
     state.finished = true;
-    clearInterval(state.timerId);
     render();
-    if (won) setMessage(`Solved in ${timerEl.textContent}! 🎉`, 'win');
-    else setMessage('Solution revealed.');
+    save();
+    if (won) {
+      buzz([60, 60, 60]);
+      setMessage(`Solved in ${formatTime(state.elapsed)}! 🎉`, 'win');
+    } else {
+      setMessage('Solution revealed. Tap New to play again.');
+    }
   }
+
+  function toggleNotes() {
+    state.notesMode = !state.notesMode;
+    notesBtn.setAttribute('aria-pressed', String(state.notesMode));
+    notesStateEl.textContent = state.notesMode ? 'on' : 'off';
+  }
+
+  // ---------- Rendering ----------
 
   function render() {
     const sel = state.selected;
-    const selRow = Math.floor(sel / 9);
-    const selCol = sel % 9;
     const selVal = sel >= 0 ? state.board[sel] : 0;
     const conflicts = Sudoku.findConflicts(state.board);
 
     for (let i = 0; i < 81; i++) {
       const cell = cells[i];
       const v = state.board[i];
-      const r = Math.floor(i / 9);
-      const c = i % 9;
 
       cell.classList.toggle('given', isGiven(i));
       cell.classList.toggle('selected', i === sel);
-      const related = sel >= 0 && (r === selRow || c === selCol ||
-        (Math.floor(r / 3) === Math.floor(selRow / 3) && Math.floor(c / 3) === Math.floor(selCol / 3)));
-      cell.classList.toggle('related', related && i !== sel);
+      cell.classList.toggle('related', sel >= 0 && i !== sel && sameUnit(i, sel));
       cell.classList.toggle('same', selVal !== 0 && v === selVal && i !== sel);
       const wrong = !isGiven(i) && v !== 0 && v !== state.solution[i];
       cell.classList.toggle('error', wrong || (conflicts.has(i) && !isGiven(i)));
@@ -206,45 +334,59 @@
       }
     }
 
-    // Dim numbers that have all 9 placed correctly.
+    // Fade numbers that have all 9 placed correctly.
     const counts = new Array(10).fill(0);
     state.board.forEach((v, i) => { if (v && v === state.solution[i]) counts[v]++; });
     [...numpadEl.children].forEach((btn, k) => btn.classList.toggle('done', counts[k + 1] === 9));
 
     mistakesEl.textContent = `Mistakes: ${state.mistakes}`;
+    timerEl.textContent = formatTime(elapsedMs());
   }
 
-  function toggleNotes() {
-    state.notesMode = !state.notesMode;
-    notesBtn.setAttribute('aria-pressed', String(state.notesMode));
-    notesBtn.textContent = `Notes: ${state.notesMode ? 'on' : 'off'}`;
-  }
+  // ---------- Input wiring ----------
 
   document.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'SELECT') return;
     if (e.key >= '1' && e.key <= '9') return input(Number(e.key));
     if (e.key === 'Backspace' || e.key === 'Delete' || e.key === '0') return erase();
     if (e.key === 'n' || e.key === 'N') return toggleNotes();
-    const moves = { ArrowUp: -9, ArrowDown: 9, ArrowLeft: -1, ArrowRight: 1 };
+    if ((e.ctrlKey || e.metaKey) && e.key === 'z') return undo();
+    const moves = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] };
     if (e.key in moves) {
       e.preventDefault();
-      let i = state.selected < 0 ? 0 : state.selected;
-      const r = Math.floor(i / 9);
-      const c = i % 9;
-      if (e.key === 'ArrowUp') i = ((r + 8) % 9) * 9 + c;
-      if (e.key === 'ArrowDown') i = ((r + 1) % 9) * 9 + c;
-      if (e.key === 'ArrowLeft') i = r * 9 + ((c + 8) % 9);
-      if (e.key === 'ArrowRight') i = r * 9 + ((c + 1) % 9);
-      select(i);
+      const i = state.selected < 0 ? 0 : state.selected;
+      const [dr, dc] = moves[e.key];
+      const r = (Math.floor(i / 9) + dr + 9) % 9;
+      const c = (i % 9 + dc + 9) % 9;
+      select(r * 9 + c);
     }
   });
 
-  document.getElementById('new-game').addEventListener('click', newGame);
+  document.getElementById('new-game').addEventListener('click', () => {
+    if (inProgress() && !confirm('Start a new game? Your current progress will be lost.')) return;
+    newGame();
+  });
+  difficultyEl.addEventListener('change', () => {
+    if (inProgress() && !confirm(`Start a new ${difficultyEl.value} game? Your current progress will be lost.`)) {
+      difficultyEl.value = state.difficulty;
+      return;
+    }
+    newGame();
+  });
+  document.getElementById('undo').addEventListener('click', undo);
   document.getElementById('erase').addEventListener('click', erase);
   document.getElementById('hint').addEventListener('click', hint);
   document.getElementById('check').addEventListener('click', check);
   document.getElementById('solve').addEventListener('click', solveAll);
   notesBtn.addEventListener('click', toggleNotes);
 
-  newGame();
+  // ---------- Start ----------
+
+  if (load()) {
+    render();
+    if (state.finished) setMessage('Tap New to play again.');
+    else startTimer();
+  } else {
+    newGame();
+  }
 })();
