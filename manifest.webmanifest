@@ -1,7 +1,7 @@
 {
   "name": "Sudoku",
   "short_name": "Sudoku",
-  "description": "A simple Sudoku game with no ads.",
+  "description": "Sudoku and Groups logic puzzles with no ads.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

@@ -2,6 +2,7 @@
   'use strict';
 
   const SAVE_KEY = 'sudoku-save-v1';
+  const isActive = () => GameMode.isActive('sudoku');
 
   const boardEl = document.getElementById('board');
   const numpadEl = document.getElementById('numpad');
@@ -103,11 +104,21 @@
     if (document.hidden) {
       pauseTimer();
       save();
-    } else {
+    } else if (isActive()) {
       startTimer();
     }
   });
   window.addEventListener('pagehide', save);
+
+  // Pause while the other game mode is showing.
+  window.addEventListener('modechange', () => {
+    if (isActive()) {
+      startTimer();
+    } else {
+      pauseTimer();
+      save();
+    }
+  });
 
   // ---------- Saving progress ----------
 
@@ -166,7 +177,7 @@
       state.difficulty = difficultyEl.value;
       state.elapsed = 0;
       state.runStart = 0;
-      startTimer();
+      if (isActive()) startTimer();
       setMessage('');
       render();
       save();
@@ -346,7 +357,7 @@
   // ---------- Input wiring ----------
 
   document.addEventListener('keydown', (e) => {
-    if (e.target.tagName === 'SELECT') return;
+    if (!isActive() || e.target.tagName === 'SELECT') return;
     if (e.key >= '1' && e.key <= '9') return input(Number(e.key));
     if (e.key === 'Backspace' || e.key === 'Delete' || e.key === '0') return erase();
     if (e.key === 'n' || e.key === 'N') return toggleNotes();
@@ -385,7 +396,7 @@
   if (load()) {
     render();
     if (state.finished) setMessage('Tap New to play again.');
-    else startTimer();
+    else if (isActive()) startTimer();
   } else {
     newGame();
   }
