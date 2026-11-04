@@ -176,7 +176,13 @@
     const n = Number(sizeEl.value);
     setMessage('Generating…');
     setTimeout(() => {
-      const p = Groups.generate(n);
+      let p;
+      try {
+        p = Groups.generate(n);
+      } catch (err) {
+        setMessage(`Couldn't create a puzzle (${err.message}). Tap New to try again.`, 'bad');
+        return;
+      }
       const palette = shuffle([...Array(COLOR_COUNT).keys()]);
       Object.assign(state, {
         size: n,

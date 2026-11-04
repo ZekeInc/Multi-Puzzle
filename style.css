@@ -158,6 +158,7 @@ button:active { transform: scale(0.96); }
   display: grid;
   grid-template-columns: repeat(9, 1fr);
   grid-template-rows: repeat(9, 1fr);
+  width: min(100%, calc(100vh - 380px));
   width: min(100%, calc(100dvh - 380px - env(safe-area-inset-top) - env(safe-area-inset-bottom)));
   min-width: 260px;
   aspect-ratio: 1;
@@ -328,6 +329,7 @@ button:active { transform: scale(0.96); }
   display: grid;
   grid-template-columns: repeat(var(--n), 1fr);
   grid-template-rows: repeat(var(--n), 1fr);
+  width: min(100%, calc(100vh - 330px));
   width: min(100%, calc(100dvh - 330px - env(safe-area-inset-top) - env(safe-area-inset-bottom)));
   min-width: 260px;
   aspect-ratio: 1;
@@ -359,6 +361,7 @@ button:active { transform: scale(0.96); }
   content: "✕";
   color: var(--g-mark);
   opacity: 0.55;
+  font-size: 1.1rem;
   font-size: calc(100cqi / var(--n) * 0.42);
   line-height: 1;
 }
@@ -367,6 +370,7 @@ button:active { transform: scale(0.96); }
   width: 52%;
   height: 52%;
   border-radius: 50%;
+  border: 4px solid var(--g-mark);
   border: max(3px, calc(100cqi / var(--n) * 0.09)) solid var(--g-mark);
   box-sizing: border-box;
 }

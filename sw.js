@@ -1,6 +1,6 @@
 // Service worker: caches the app so it works offline once installed.
 // Bump CACHE when files change so phones pick up the new version.
-const CACHE = 'sudoku-v2';
+const CACHE = 'sudoku-v3';
 const FILES = [
   './',
   'index.html',
@@ -32,15 +32,18 @@ self.addEventListener('activate', (event) => {
 });
 
 // Network first so updates show up when online; fall back to the cache offline.
+// 'no-cache' makes the browser check with the server instead of reusing a
+// stale copy from its own HTTP cache, so a new page never gets old files.
 self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET') return;
+  const req = event.request;
+  if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
   event.respondWith(
-    fetch(event.request)
+    fetch(req.url, { cache: 'no-cache', credentials: 'same-origin' })
       .then((response) => {
         const copy = response.clone();
-        caches.open(CACHE).then((cache) => cache.put(event.request, copy));
+        caches.open(CACHE).then((cache) => cache.put(req, copy));
         return response;
       })
-      .catch(() => caches.match(event.request, { ignoreSearch: true }))
+      .catch(() => caches.match(req, { ignoreSearch: true }))
   );
 });
