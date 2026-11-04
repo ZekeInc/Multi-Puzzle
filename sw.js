@@ -1,12 +1,15 @@
 // Service worker: caches the app so it works offline once installed.
 // Bump CACHE when files change so phones pick up the new version.
-const CACHE = 'sudoku-v1';
+const CACHE = 'sudoku-v2';
 const FILES = [
   './',
   'index.html',
   'style.css',
   'sudoku.js',
   'app.js',
+  'modes.js',
+  'groups.js',
+  'groups-app.js',
   'manifest.webmanifest',
   'icons/icon.svg',
   'icons/icon-192.png',
