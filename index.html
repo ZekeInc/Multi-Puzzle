@@ -14,14 +14,19 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="style.css?v=3">
+  <link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
   <main>
+    <div class="topbar">
     <nav class="tabs" role="tablist" aria-label="Game mode">
       <button role="tab" id="tab-sudoku" data-mode="sudoku" aria-controls="sudoku-view">Sudoku</button>
       <button role="tab" id="tab-groups" data-mode="groups" aria-controls="groups-view">Groups</button>
     </nav>
+    <button id="scores-open" class="icon-btn" aria-label="Best times" aria-expanded="false" aria-controls="scores-modal">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 21h8"/><path d="M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0Z"/><path d="M17 5h3v2a3 3 0 0 1-3 3"/><path d="M7 5H4v2a3 3 0 0 0 3 3"/></svg>
+    </button>
+    </div>
 
     <!-- ===================== Sudoku ===================== -->
     <section class="view" id="sudoku-view" role="tabpanel" aria-labelledby="tab-sudoku">
@@ -29,6 +34,7 @@
         <h1>Sudoku</h1>
         <div class="status">
           <span id="mistakes">Mistakes: 0</span>
+          <span id="best">Best: --:--</span>
           <span id="timer">00:00</span>
         </div>
       </header>
@@ -77,6 +83,7 @@
       <header>
         <h1>Groups</h1>
         <div class="status">
+          <span id="g-best">Best: --:--</span>
           <span id="g-timer">00:00</span>
         </div>
       </header>
@@ -132,11 +139,24 @@
     </section>
   </main>
 
-  <script src="modes.js?v=3"></script>
-  <script src="sudoku.js?v=3"></script>
-  <script src="app.js?v=3"></script>
-  <script src="groups.js?v=3"></script>
-  <script src="groups-app.js?v=3"></script>
+  <div class="modal" id="scores-modal" hidden>
+    <div class="rules scores" role="dialog" aria-modal="true" aria-labelledby="scores-title">
+      <h2 id="scores-title">Best times</h2>
+      <div id="scores-body"></div>
+      <p class="note">Games where you used Hint or Solve don't count toward best times.</p>
+      <div class="modal-buttons">
+        <button id="scores-reset" class="secondary">Reset</button>
+        <button id="scores-close">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="modes.js?v=4"></script>
+  <script src="scores.js?v=4"></script>
+  <script src="sudoku.js?v=4"></script>
+  <script src="app.js?v=4"></script>
+  <script src="groups.js?v=4"></script>
+  <script src="groups-app.js?v=4"></script>
   <script>
     if ('serviceWorker' in navigator && location.protocol !== 'file:') {
       window.addEventListener('load', () => navigator.serviceWorker.register('sw.js'));

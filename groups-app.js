@@ -9,6 +9,7 @@
   const boardEl = document.getElementById('g-board');
   const sizeEl = document.getElementById('g-size');
   const timerEl = document.getElementById('g-timer');
+  const bestEl = document.getElementById('g-best');
   const messageEl = document.getElementById('g-message');
   const rulesBtn = document.getElementById('g-rules');
   const rulesEl = document.getElementById('g-rules-text');
@@ -23,6 +24,7 @@
     elapsed: 0,
     runStart: 0,
     finished: false,
+    hintsUsed: false,
   };
 
   let cells = [];
@@ -94,6 +96,7 @@
         marks: state.marks,
         elapsed: elapsedMs(),
         finished: state.finished,
+        hintsUsed: state.hintsUsed,
       }));
     } catch (e) { /* storage unavailable */ }
   }
@@ -104,7 +107,7 @@
       if (!d || d.regions.length !== d.size * d.size) return false;
       Object.assign(state, {
         size: d.size, regions: d.regions, solution: d.solution, colors: d.colors,
-        marks: d.marks, elapsed: d.elapsed, finished: d.finished,
+        marks: d.marks, elapsed: d.elapsed, finished: d.finished, hintsUsed: !!d.hintsUsed,
         history: [], runStart: 0,
       });
       sizeEl.value = String(d.size);
@@ -168,7 +171,13 @@
     });
     boardEl.classList.toggle('solved', state.finished);
     timerEl.textContent = formatTime(elapsedMs());
+    renderBest();
   }
+
+  function renderBest() {
+    bestEl.textContent = Scores.bestLabel('groups', String(state.size || sizeEl.value));
+  }
+  window.addEventListener('scoreschange', renderBest);
 
   // ---------- Game flow ----------
 
@@ -194,6 +203,7 @@
         elapsed: 0,
         runStart: 0,
         finished: false,
+        hintsUsed: false,
       });
       if (isActive()) startTimer();
       buildBoard();
@@ -226,7 +236,18 @@
     state.marks = state.marks.map((m) => (m === CIRCLE ? CIRCLE : CROSS));
     render();
     buzz([60, 60, 60]);
-    setMessage(`Solved in ${formatTime(state.elapsed)}! 🎉`, 'win');
+    const time = formatTime(state.elapsed);
+    const result = Scores.record('groups', String(state.size), state.elapsed, !state.hintsUsed);
+    if (result.isNew && result.previous !== null) {
+      setMessage(`Solved in ${time}! 🏆 New best (was ${formatTime(result.previous)})`, 'win');
+    } else if (result.isNew) {
+      setMessage(`Solved in ${time}! 🏆 First best time`, 'win');
+    } else if (state.hintsUsed) {
+      setMessage(`Solved in ${time}! 🎉 Hint used, so not counted as a best time.`, 'win');
+    } else {
+      setMessage(`Solved in ${time}! 🎉`, 'win');
+    }
+    renderBest();
   }
 
   function undo() {
@@ -268,6 +289,7 @@
   function hint() {
     if (state.finished) return;
     snapshot();
+    state.hintsUsed = true;
     // First fix a wrong O, then a ✕ that covers an O, otherwise reveal one O.
     const wrongO = state.marks.findIndex((m, i) => m === CIRCLE && !isSolutionCell(i));
     if (wrongO >= 0) {

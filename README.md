@@ -26,6 +26,12 @@ Every puzzle is randomly generated and has exactly one solution.
 - Os that break a rule are highlighted in red
 - Undo, clear, check and hint; timer and progress saved per mode
 
+## Best times
+Tap the 🏆 button to see your fastest time and number of puzzles solved for every
+Sudoku difficulty and Groups size. Your best for the current one also shows above the board.
+Games where you used Hint or Solve don't count toward best times. Best times are saved on
+your device and can be reset from the same screen.
+
 ## Sudoku features
 - New puzzles generated on the fly (Easy / Medium / Hard), each with a unique solution
 - Big touch targets, undo, notes (pencil marks), erase, hints, check and reveal solution
@@ -42,5 +48,6 @@ Every puzzle is randomly generated and has exactly one solution.
 - `groups.js` — Groups solver and unique-solution puzzle generator
 - `groups-app.js` — Groups UI and controls
 - `modes.js` — switching between the two modes
+- `scores.js` — best times and the Best times screen
 - `index.html`, `style.css` — page and styles
 - `manifest.webmanifest`, `sw.js`, `icons/` — home-screen install and offline support
