@@ -88,6 +88,31 @@ main {
   min-height: 0;
 }
 
+.topbar {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+.topbar .tabs { flex: 1; }
+.icon-btn {
+  width: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border-radius: 12px;
+  color: var(--accent);
+}
+.icon-btn svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -116,7 +141,16 @@ header {
   justify-content: space-between;
 }
 
-h1 { margin: 0; font-size: 1.5rem; }
+/* The tab already names the game, so the heading is for screen readers only. */
+h1 {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+header .status { flex: 1; justify-content: space-between; }
 
 .status {
   display: flex;
@@ -256,7 +290,6 @@ button:active { transform: scale(0.96); }
 /* Short screens (e.g. landscape phones): tighten spacing. */
 @media (max-height: 640px) {
   main, .view { gap: 6px; }
-  h1 { font-size: 1.2rem; }
   .actions button { min-height: 44px; flex-direction: row; justify-content: center; }
   .numpad button { min-height: 46px; }
   #board { width: min(100%, calc(100dvh - 300px)); }
@@ -266,7 +299,7 @@ button:active { transform: scale(0.96); }
 /* Landscape phones: board on the left, controls on the right. */
 @media (orientation: landscape) and (max-height: 600px) {
   main { max-width: none; }
-  .tabs { width: min(100%, 360px); align-self: center; }
+  .topbar { width: min(100%, 420px); align-self: center; }
   .tabs button { min-height: 30px; }
   .view {
     display: grid;
@@ -388,4 +421,28 @@ button:active { transform: scale(0.96); }
 }
 @media (prefers-reduced-motion: reduce) {
   .g-board.solved .g-cell.circle::after { animation: none; }
+}
+
+/* ===================== Best times ===================== */
+
+.scores h3 { margin: 14px 0 4px; font-size: 1rem; }
+.scores table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.scores th, .scores td {
+  padding: 6px 4px;
+  text-align: right;
+  border-bottom: 1px solid var(--line);
+}
+.scores th:first-child { text-align: left; }
+.scores thead th { color: var(--muted); font-weight: 600; font-size: 0.85rem; }
+.scores tbody th { font-weight: 500; }
+.scores .note { color: var(--muted); font-size: 0.85rem; }
+.modal-buttons { display: grid; grid-template-columns: 1fr 2fr; gap: 8px; }
+.rules .modal-buttons button.secondary {
+  background: var(--surface);
+  color: var(--error);
+  border-color: var(--line);
 }

@@ -9,6 +9,7 @@
   const messageEl = document.getElementById('message');
   const timerEl = document.getElementById('timer');
   const mistakesEl = document.getElementById('mistakes');
+  const bestEl = document.getElementById('best');
   const difficultyEl = document.getElementById('difficulty');
   const notesBtn = document.getElementById('notes-toggle');
   const notesStateEl = document.getElementById('notes-state');
@@ -25,6 +26,7 @@
     elapsed: 0,      // ms accumulated before the current run
     runStart: 0,     // timestamp the timer last resumed, 0 when paused
     finished: false,
+    hintsUsed: false,
     difficulty: 'medium',
   };
 
@@ -56,7 +58,7 @@
 
   function setMessage(text, cls) {
     messageEl.textContent = text;
-    messageEl.className = cls || '';
+    messageEl.className = 'message' + (cls ? ' ' + cls : '');
   }
 
   function buzz(pattern) {
@@ -133,6 +135,7 @@
         mistakes: state.mistakes,
         elapsed: elapsedMs(),
         finished: state.finished,
+        hintsUsed: state.hintsUsed,
         difficulty: state.difficulty,
       }));
     } catch (e) { /* storage unavailable: progress just isn't kept */ }
@@ -149,6 +152,7 @@
       state.mistakes = data.mistakes;
       state.elapsed = data.elapsed;
       state.finished = data.finished;
+      state.hintsUsed = !!data.hintsUsed;
       state.difficulty = data.difficulty;
       state.history = [];
       state.runStart = 0;
@@ -174,6 +178,7 @@
       state.selected = -1;
       state.mistakes = 0;
       state.finished = false;
+      state.hintsUsed = false;
       state.difficulty = difficultyEl.value;
       state.elapsed = 0;
       state.runStart = 0;
@@ -263,6 +268,7 @@
       i = candidates[Math.floor(Math.random() * candidates.length)];
     }
     pushHistory(i);
+    state.hintsUsed = true;
     state.board[i] = state.solution[i];
     state.notes[i].clear();
     clearRelatedNotes(i, state.solution[i]);
@@ -299,7 +305,18 @@
     save();
     if (won) {
       buzz([60, 60, 60]);
-      setMessage(`Solved in ${formatTime(state.elapsed)}! 🎉`, 'win');
+      const time = formatTime(state.elapsed);
+      const result = Scores.record('sudoku', state.difficulty, state.elapsed, !state.hintsUsed);
+      if (result.isNew && result.previous !== null) {
+        setMessage(`Solved in ${time}! 🏆 New best (was ${formatTime(result.previous)})`, 'win');
+      } else if (result.isNew) {
+        setMessage(`Solved in ${time}! 🏆 First best time`, 'win');
+      } else if (state.hintsUsed) {
+        setMessage(`Solved in ${time}! 🎉 Hint used, so not counted as a best time.`, 'win');
+      } else {
+        setMessage(`Solved in ${time}! 🎉`, 'win');
+      }
+      renderBest();
     } else {
       setMessage('Solution revealed. Tap New to play again.');
     }
@@ -352,7 +369,13 @@
 
     mistakesEl.textContent = `Mistakes: ${state.mistakes}`;
     timerEl.textContent = formatTime(elapsedMs());
+    renderBest();
   }
+
+  function renderBest() {
+    bestEl.textContent = Scores.bestLabel('sudoku', state.difficulty);
+  }
+  window.addEventListener('scoreschange', renderBest);
 
   // ---------- Input wiring ----------
 
