@@ -111,6 +111,7 @@
 
   // Set the menus to the current game's options.
   function showOptions() {
+    if (!state.colors) return;   // no game yet: keep the menus' defaults
     colorsEl.value = String(state.colors);
     extraEl.value = String(state.extra);
     capEl.value = String(state.cap);
@@ -402,19 +403,41 @@
   function confirmNew() {
     return !inProgress() || confirm('Start a new puzzle? Your current progress will be lost.');
   }
-  function optionChanged() {
-    const note = limitOptions();
-    if (confirmNew()) {
-      boardEl.classList.remove('solved');
-      newGame();
-      if (note) setTimeout(() => setMessage(note), 40);
-    } else {
-      showOptions();
-    }
+  // ---------- Preferences pop-up ----------
+  // Menu changes only take effect when "New puzzle" is tapped; Cancel puts them back.
+
+  const prefsEl = document.getElementById('s-prefs-modal');
+  const prefsBtn = document.getElementById('s-prefs');
+  const prefsNoteEl = document.getElementById('s-prefs-note');
+
+  function showPrefs(show) {
+    if (show) { showOptions(); prefsNoteEl.textContent = ''; }
+    prefsEl.hidden = !show;
+    prefsBtn.setAttribute('aria-expanded', String(show));
+    if (show) extraEl.focus();
+    else prefsBtn.focus();
   }
-  for (const el of [colorsEl, extraEl, capEl, emptyEl]) el.addEventListener('change', optionChanged);
+  function cancelPrefs() {
+    showOptions();
+    showPrefs(false);
+  }
+  for (const el of [colorsEl, extraEl, capEl, emptyEl]) {
+    el.addEventListener('change', () => { prefsNoteEl.textContent = limitOptions(); });
+  }
+  prefsBtn.addEventListener('click', () => showPrefs(true));
+  document.getElementById('s-prefs-cancel').addEventListener('click', cancelPrefs);
+  prefsEl.addEventListener('click', (e) => { if (e.target === prefsEl) cancelPrefs(); });
+  document.getElementById('s-prefs-apply').addEventListener('click', () => {
+    if (!confirmNew()) return;
+    showPrefs(false);
+    boardEl.classList.remove('solved');
+    newGame();
+  });
   document.getElementById('s-new').addEventListener('click', () => {
-    if (confirmNew()) { boardEl.classList.remove('solved'); newGame(); }
+    if (!confirmNew()) return;
+    showOptions();   // New keeps the current game's preferences
+    boardEl.classList.remove('solved');
+    newGame();
   });
   document.getElementById('s-undo').addEventListener('click', undo);
   document.getElementById('s-restart').addEventListener('click', restart);
@@ -430,6 +453,7 @@
   rulesEl.addEventListener('click', (e) => { if (e.target === rulesEl) showRules(false); });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !rulesEl.hidden) return showRules(false);
+    if (e.key === 'Escape' && !prefsEl.hidden) return cancelPrefs();
     if (isActive() && (e.ctrlKey || e.metaKey) && e.key === 'z') undo();
   });
 

@@ -22,7 +22,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="style.css?v=13">
+  <link rel="stylesheet" href="style.css?v=14">
 </head>
 <body>
   <main>
@@ -163,38 +163,50 @@
       </header>
 
       <div class="top-controls sort-controls">
-        <div class="opt-group" role="group" aria-labelledby="s-containers-label">
-          <span class="opt-label" id="s-containers-label">Containers</span>
-          <select id="s-extra" aria-label="Extra empty boxes">
-            <option value="1">1 extra</option>
-            <option value="2" selected>2 extra</option>
-            <option value="3">3 extra</option>
-          </select>
-          <select id="s-empty" aria-label="Empty spaces in each box">
-            <option value="0" selected>0 empty</option>
-            <option value="1">1 empty</option>
-            <option value="2">2 empty</option>
-          </select>
-        </div>
-        <div class="opt-group" role="group" aria-labelledby="s-objects-label">
-          <span class="opt-label" id="s-objects-label">Objects</span>
-          <select id="s-colors" aria-label="Number of colours">
-            <option value="4">4 colours</option>
-            <option value="5">5 colours</option>
-            <option value="6" selected>6 colours</option>
-            <option value="7">7 colours</option>
-            <option value="8">8 colours</option>
-            <option value="9">9 colours</option>
-            <option value="10">10 colours</option>
-          </select>
-          <select id="s-cap" aria-label="Squares per box">
-            <option value="3">3 per box</option>
-            <option value="4" selected>4 per box</option>
-            <option value="5">5 per box</option>
-            <option value="6">6 per box</option>
-          </select>
-        </div>
+        <button id="s-prefs" aria-expanded="false" aria-controls="s-prefs-modal">⚙ Preferences</button>
         <button id="s-new">New</button>
+      </div>
+
+      <div class="modal" id="s-prefs-modal" hidden>
+        <div class="rules prefs" role="dialog" aria-modal="true" aria-labelledby="s-prefs-title">
+          <h2 id="s-prefs-title">Preferences</h2>
+          <div class="opt-group" role="group" aria-labelledby="s-containers-label">
+            <span class="opt-label" id="s-containers-label">Containers</span>
+            <select id="s-extra" aria-label="Extra empty boxes">
+              <option value="1">1 extra</option>
+              <option value="2" selected>2 extra</option>
+              <option value="3">3 extra</option>
+            </select>
+            <select id="s-empty" aria-label="Empty spaces in each box">
+              <option value="0" selected>0 empty</option>
+              <option value="1">1 empty</option>
+              <option value="2">2 empty</option>
+            </select>
+          </div>
+          <div class="opt-group" role="group" aria-labelledby="s-objects-label">
+            <span class="opt-label" id="s-objects-label">Objects</span>
+            <select id="s-colors" aria-label="Number of colours">
+              <option value="4">4 colours</option>
+              <option value="5">5 colours</option>
+              <option value="6" selected>6 colours</option>
+              <option value="7">7 colours</option>
+              <option value="8">8 colours</option>
+              <option value="9">9 colours</option>
+              <option value="10">10 colours</option>
+            </select>
+            <select id="s-cap" aria-label="Squares per box">
+              <option value="3">3 per box</option>
+              <option value="4" selected>4 per box</option>
+              <option value="5">5 per box</option>
+              <option value="6">6 per box</option>
+            </select>
+          </div>
+          <p id="s-prefs-note" class="note" role="status"></p>
+          <div class="modal-buttons">
+            <button id="s-prefs-cancel" class="secondary neutral">Cancel</button>
+            <button id="s-prefs-apply">New puzzle</button>
+          </div>
+        </div>
       </div>
 
       <div class="modal" id="s-rules-text" hidden>
@@ -205,8 +217,9 @@
           then tap another box to drop them there. You can only drop onto an
           <b>empty box</b> or onto the <b>same number</b>, and each box holds <span id="s-cap-text">4</span> squares.</p>
           <p>Use the extra empty boxes as space to shuffle squares around. Every puzzle can be solved.</p>
-          <p>Choose how many squares fit in a box (<b>per box</b>) and how many
-          <b>empty</b> spaces each box starts with. More empty spaces make it easier.</p>
+          <p>Tap <b>⚙ Preferences</b> to choose the number of colours, extra boxes, how many
+          squares fit in a box (<b>per box</b>) and how many <b>empty</b> spaces each box starts
+          with. More empty spaces make it easier.</p>
           <button id="s-rules-close">Got it</button>
         </div>
       </div>
@@ -258,7 +271,7 @@
   <script src="groups.js?v=4"></script>
   <script src="groups-app.js?v=4"></script>
   <script src="sort.js?v=8"></script>
-  <script src="sort-app.js?v=13"></script>
+  <script src="sort-app.js?v=14"></script>
   <script>
     if ('serviceWorker' in navigator && location.protocol !== 'file:') {
       window.addEventListener('load', () => navigator.serviceWorker.register('sw.js'));

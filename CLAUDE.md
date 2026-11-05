@@ -9,7 +9,7 @@ Installable as a home-screen app and works offline.
 
 | File | Purpose |
 |---|---|
-| `index.html` | All markup: tab bar, one `<section class="view">` per game, pop-ups (rules, best times) |
+| `index.html` | All markup: tab bar, one `<section class="view">` per game, pop-ups (rules, best times, Sort preferences) |
 | `style.css` | All styles. Theme colours are CSS variables on `:root` (light) and `:root[data-theme="dark"]` |
 | `theme.js` | Light/dark toggle. Dark is the default; an inline script in `<head>` applies the saved theme before the page draws |
 | `modes.js` | Tab switching. Fires a `modechange` event; `GameMode.isActive('sudoku' \| 'groups' \| 'sort')` |
@@ -51,7 +51,9 @@ with `require()` for testing.
   Logic functions take `cap` as their last argument. 4–10 colours, but with 1 extra box and
   0 empty the most is `MAX_COLORS_TIGHT[cap]` in `sort-app.js` (larger deals are rarely solvable).
   Best-time keys are `colours-extra`, plus `-cap-empty` when not the default 4/0.
-  The menus sit in two labelled groups: **Containers** (extra, empty) and **Objects** (colours, per box).
+  The menus live in the **⚙ Preferences** pop-up (`#s-prefs-modal`), in two labelled groups:
+  **Containers** (extra, empty) and **Objects** (colours, per box). Changes apply only when
+  **New puzzle** is tapped; Cancel / Escape / tapping outside put the menus back.
 - Win when no box holds more than one colour; any colour split across boxes is then gathered
   into one full box automatically (`tidyMoves` in `sort-app.js`, not counted as moves).
 - Squares use the muted palette `--s0`–`--s9` and show numbers 1–10. Colour 7 (walnut,
