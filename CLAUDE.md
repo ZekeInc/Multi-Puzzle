@@ -35,7 +35,9 @@ with `require()` for testing.
 - **Themes:** check UI changes in both dark and light. Don't use `prefers-color-scheme`; the
   theme comes from `data-theme` on `<html>`.
 - **Layout:** must fit phones down to 320px wide with no scrolling, and landscape phones
-  (two-column layout under `@media (orientation: landscape) and (max-height: 600px)`).
+  (under `@media (orientation: landscape) and (max-height: 600px)`: `.view` is `display: contents` and `main`
+  is a 5-column grid; top line = tab bar left + the game's `.top-controls` right; board centred; actions
+  split 2 | 2 either side, status top-left, message above the right pair; Sudoku's numpad is 3 × 3 on the right).
   Respect `prefers-reduced-motion` for animations.
   `main` is exactly the visible height: `--app-h`, set from `visualViewport` in `modes.js`
   (`100dvh` can disagree with what mobile browsers really show, e.g. Android Chrome / Samsung Internet with a sliding address bar). Size boards from `--app-h`, not `100dvh`.
