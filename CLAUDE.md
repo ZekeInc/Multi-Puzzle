@@ -38,7 +38,7 @@ with `require()` for testing.
   (two-column layout under `@media (orientation: landscape) and (max-height: 600px)`).
   Respect `prefers-reduced-motion` for animations.
   `main` is exactly the visible height: `--app-h`, set from `visualViewport` in `modes.js`
-  (`100dvh` disagrees with what iOS Safari really shows). Size boards from `--app-h`, not `100dvh`.
+  (`100dvh` can disagree with what mobile browsers really show, e.g. Android Chrome / Samsung Internet with a sliding address bar). Size boards from `--app-h`, not `100dvh`.
 - **Confirm before losing progress:** New, Restart, Clear and Solve ask first when a game is in progress.
 
 ## Sort game notes
@@ -59,5 +59,7 @@ with `require()` for testing.
 There is no test framework. Check changes by:
 - Running logic in Node, e.g. `node -e "const S=require('./sort.js'); console.log(S.generate(6,2))"`.
 - Serving the folder (`python3 -m http.server`) and driving it with Playwright using phone
-  emulation (`devices['iPhone 13']`, `devices['iPhone SE']`, `devices['iPhone 13 landscape']`):
+  emulation (`devices['iPhone 13']`, `devices['iPhone SE']`, `devices['iPhone 13 landscape']`, and the
+  owner's phone, a Samsung Galaxy S24: viewport `{ width: 360, height: 780 }` plus shorter heights for
+  the browser bars, and `780x360` landscape):
   check for page errors and no horizontal/vertical overflow, in both themes.
