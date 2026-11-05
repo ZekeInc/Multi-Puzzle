@@ -425,7 +425,7 @@
     } else if (result.isNew) {
       setMessage(`${base} 🏆 First best time`, 'win');
     } else if (state.hintsUsed) {
-      setMessage(`${base} 🎉 Hint used, so not counted as a best time.`, 'win');
+      setMessage(`${base} 🎉 Hint used, so no best time.`, 'win');
     } else {
       setMessage(`${base} 🎉`, 'win');
     }
