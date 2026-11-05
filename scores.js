@@ -12,7 +12,17 @@
     },
     groups: {
       title: 'Groups',
-      keys: [5, 6, 7, 8, 9, 10].map((n) => [String(n), `${n} × ${n}`]),
+      // Played keys from storage: `size-level`, or just `size` for games from
+      // before levels existed (shown as Random, like Sort).
+      fromSaved: true,
+      label(key) {
+        const [n, level = 'random'] = key.split('-');
+        return `${n} × ${n}, ${level[0].toUpperCase()}${level.slice(1)}`;
+      },
+      order(key) {
+        const [n, level] = key.split('-');
+        return Number(n) * 10 + (level ? ['easy', 'medium', 'hard'].indexOf(level) + 1 : 0);
+      },
     },
     sort: {
       title: 'Sort',
@@ -96,7 +106,9 @@
         ? Object.keys(readAll())
           .filter((id) => id.startsWith(`${game}:`))
           .map((id) => id.slice(game.length + 1))
-          .sort((x, y) => x.localeCompare(y, undefined, { numeric: true }))
+          .sort(cat.order
+            ? (x, y) => cat.order(x) - cat.order(y)
+            : (x, y) => x.localeCompare(y, undefined, { numeric: true }))
           .map((key) => [key, cat.label(key)])
         : cat.keys;
       for (const [key, label] of keys) {

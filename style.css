@@ -344,7 +344,7 @@ button:active { transform: scale(0.96); }
 
 /* ===================== Groups mode ===================== */
 
-.groups-controls { grid-template-columns: 1.4fr 1fr 1fr; }
+.groups-controls { grid-template-columns: 2fr 1fr 1fr; }
 
 .modal {
   position: fixed;
@@ -500,6 +500,7 @@ button:active { transform: scale(0.96); }
   .prefs .opt-group { grid-template-columns: minmax(0, 1fr); align-content: start; margin-top: 8px; }
   .opt-group select { min-height: 40px; }
   .prefs .note { margin-top: 6px; }
+  #g-prefs-modal .prefs-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 #sort-view .board-wrap {

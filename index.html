@@ -22,7 +22,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="style.css?v=18">
+  <link rel="stylesheet" href="style.css?v=20">
 </head>
 <body>
   <main>
@@ -102,16 +102,40 @@
       </header>
 
       <div class="top-controls groups-controls">
-        <select id="g-size" aria-label="Grid size">
-          <option value="5">5 × 5</option>
-          <option value="6">6 × 6</option>
-          <option value="7" selected>7 × 7</option>
-          <option value="8">8 × 8</option>
-          <option value="9">9 × 9</option>
-          <option value="10">10 × 10</option>
-        </select>
+        <button id="g-prefs" aria-expanded="false" aria-controls="g-prefs-modal">⚙ Preferences</button>
         <button id="g-new">New</button>
         <button id="g-rules" aria-expanded="false" aria-controls="g-rules-text">Rules</button>
+      </div>
+
+      <div class="modal" id="g-prefs-modal" hidden>
+        <div class="rules prefs" role="dialog" aria-modal="true" aria-labelledby="g-prefs-title">
+          <h2 id="g-prefs-title">Preferences</h2>
+          <div class="prefs-groups">
+            <div class="opt-group" role="group" aria-labelledby="g-level-label">
+              <span class="opt-label" id="g-level-label">Difficulty</span>
+              <select id="g-level" class="wide" aria-label="Difficulty">
+                <option value="easy">Easy</option>
+                <option value="medium" selected>Medium</option>
+                <option value="hard">Hard</option>
+              </select>
+            </div>
+            <div class="opt-group" role="group" aria-labelledby="g-size-label">
+              <span class="opt-label" id="g-size-label">Grid size</span>
+              <select id="g-size" class="wide" aria-label="Grid size">
+                <option value="5">5 × 5</option>
+                <option value="6">6 × 6</option>
+                <option value="7" selected>7 × 7</option>
+                <option value="8">8 × 8</option>
+                <option value="9">9 × 9</option>
+                <option value="10">10 × 10</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-buttons">
+            <button id="g-prefs-cancel" class="secondary neutral">Cancel</button>
+            <button id="g-prefs-apply">New puzzle</button>
+          </div>
+        </div>
       </div>
 
       <div class="modal" id="g-rules-text" hidden>
@@ -283,11 +307,11 @@
 
   <script src="theme.js?v=7"></script>
   <script src="modes.js?v=10"></script>
-  <script src="scores.js?v=8"></script>
+  <script src="scores.js?v=9"></script>
   <script src="sudoku.js?v=4"></script>
   <script src="app.js?v=4"></script>
-  <script src="groups.js?v=4"></script>
-  <script src="groups-app.js?v=4"></script>
+  <script src="groups.js?v=5"></script>
+  <script src="groups-app.js?v=6"></script>
   <script src="sort.js?v=10"></script>
   <script src="sort-app.js?v=18"></script>
   <script>

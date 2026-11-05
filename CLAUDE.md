@@ -9,13 +9,13 @@ Installable as a home-screen app and works offline.
 
 | File | Purpose |
 |---|---|
-| `index.html` | All markup: tab bar, one `<section class="view">` per game, pop-ups (rules, best times, Sort preferences) |
+| `index.html` | All markup: tab bar, one `<section class="view">` per game, pop-ups (rules, best times, Groups and Sort preferences) |
 | `style.css` | All styles. Theme colours are CSS variables on `:root` (light) and `:root[data-theme="dark"]` |
 | `theme.js` | Light/dark toggle. Dark is the default; an inline script in `<head>` applies the saved theme before the page draws |
 | `modes.js` | Tab switching. Fires a `modechange` event; `GameMode.isActive('sudoku' \| 'groups' \| 'sort')` |
 | `scores.js` | Best times per game and difficulty/size, plus the 🏆 Best times pop-up (`Scores.record`, `Scores.bestLabel`) |
 | `sudoku.js` / `app.js` | Sudoku logic (generator, solver) / Sudoku UI |
-| `groups.js` / `groups-app.js` | Groups logic (unique-solution generator) / Groups UI |
+| `groups.js` / `groups-app.js` | Groups logic (unique-solution generator, difficulty grader) / Groups UI |
 | `sort.js` / `sort-app.js` | Sort logic (rules, solver, solvable generator) / Sort UI |
 | `sw.js` | Service worker: offline cache, network-first |
 | `manifest.webmanifest`, `icons/` | Home-screen install |
@@ -40,6 +40,18 @@ with `require()` for testing.
   `main` is exactly the visible height: `--app-h`, set from `visualViewport` in `modes.js`
   (`100dvh` can disagree with what mobile browsers really show, e.g. Android Chrome / Samsung Internet with a sliding address bar). Size boards from `--app-h`, not `100dvh`.
 - **Confirm before losing progress:** New, Restart, Clear and Solve ask first when a game is in progress.
+
+## Groups game notes
+
+- Preferences (⚙ pop-up `#g-prefs-modal`, same behaviour as Sort's: changes apply only on **New puzzle**,
+  Cancel / Escape / tapping outside revert): **Difficulty** (Easy / Medium / Hard, `state.level`) then **Grid size** (5–10).
+- `Groups.grade(n, regions)` solves like a person, using stronger steps only when stuck: (1) a row/column/group
+  with one square left, (2) ✕ on a square whose O would wipe out a unit, (3) k groups confined to k rows/columns
+  (any mix of unit kinds), (4) ✕ on a square whose O, after forced follow-ups, wipes out a unit. Returns
+  `{ technique, score }` (score weights steps 2/3/4 as 1/4/10; technique 5 = needs guessing).
+- `Groups.generate(n, level)` deals up to 12 puzzles (1 s budget, at least 3), ranks them by score and takes the
+  easiest (Easy), middle (Medium) or hardest (Hard).
+- Best-time keys: `size-level` (e.g. `7-hard`); plain `size` keys are games from before levels and show as Random.
 
 ## Sort game notes
 
