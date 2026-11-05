@@ -22,7 +22,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="style.css?v=12">
+  <link rel="stylesheet" href="style.css?v=13">
 </head>
 <body>
   <main>
@@ -163,32 +163,38 @@
       </header>
 
       <div class="top-controls sort-controls">
-        <select id="s-colors" aria-label="Number of colours">
-          <option value="4">4 colours</option>
-          <option value="5">5 colours</option>
-          <option value="6" selected>6 colours</option>
-          <option value="7">7 colours</option>
-          <option value="8">8 colours</option>
-          <option value="9">9 colours</option>
-          <option value="10">10 colours</option>
-        </select>
-        <select id="s-extra" aria-label="Extra empty boxes">
-          <option value="1">1 extra</option>
-          <option value="2" selected>2 extra</option>
-          <option value="3">3 extra</option>
-        </select>
+        <div class="opt-group" role="group" aria-labelledby="s-containers-label">
+          <span class="opt-label" id="s-containers-label">Containers</span>
+          <select id="s-extra" aria-label="Extra empty boxes">
+            <option value="1">1 extra</option>
+            <option value="2" selected>2 extra</option>
+            <option value="3">3 extra</option>
+          </select>
+          <select id="s-empty" aria-label="Empty spaces in each box">
+            <option value="0" selected>0 empty</option>
+            <option value="1">1 empty</option>
+            <option value="2">2 empty</option>
+          </select>
+        </div>
+        <div class="opt-group" role="group" aria-labelledby="s-objects-label">
+          <span class="opt-label" id="s-objects-label">Objects</span>
+          <select id="s-colors" aria-label="Number of colours">
+            <option value="4">4 colours</option>
+            <option value="5">5 colours</option>
+            <option value="6" selected>6 colours</option>
+            <option value="7">7 colours</option>
+            <option value="8">8 colours</option>
+            <option value="9">9 colours</option>
+            <option value="10">10 colours</option>
+          </select>
+          <select id="s-cap" aria-label="Squares per box">
+            <option value="3">3 per box</option>
+            <option value="4" selected>4 per box</option>
+            <option value="5">5 per box</option>
+            <option value="6">6 per box</option>
+          </select>
+        </div>
         <button id="s-new">New</button>
-        <select id="s-cap" aria-label="Squares per box">
-          <option value="3">3 per box</option>
-          <option value="4" selected>4 per box</option>
-          <option value="5">5 per box</option>
-          <option value="6">6 per box</option>
-        </select>
-        <select id="s-empty" aria-label="Empty spaces in each box">
-          <option value="0" selected>0 empty</option>
-          <option value="1">1 empty</option>
-          <option value="2">2 empty</option>
-        </select>
       </div>
 
       <div class="modal" id="s-rules-text" hidden>

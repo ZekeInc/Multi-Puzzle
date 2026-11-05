@@ -331,7 +331,8 @@ button:active { transform: scale(0.96); }
     min-width: 0;
     width: calc(var(--app-h, 100dvh) - 70px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
   }
-  .top-controls > * { min-height: 40px; }
+  .top-controls > *, .opt-group select { min-height: 40px; }
+  .sort-controls > .opt-group { min-height: 0; }
   .actions button { min-height: 40px; }
   .numpad button { min-height: 48px; font-size: 1.4rem; }
 }
@@ -464,9 +465,31 @@ button:active { transform: scale(0.96); }
 
 /* ===================== Sort mode ===================== */
 
-.sort-controls { grid-template-columns: 1.2fr 1fr 1fr; }
-/* Two rows of options (colours, extra / per box, empty); New sits beside both. */
-#s-new { grid-column: 3; grid-row: 1 / span 2; }
+/* Two labelled groups of options, each a column (label, then two menus); New sits beside both menus. */
+.sort-controls {
+  grid-template-columns: 1.1fr 1.2fr 0.7fr;
+  grid-template-rows: auto auto auto;
+  row-gap: 6px;
+}
+.sort-controls > .opt-group {
+  display: grid;
+  grid-row: 1 / span 3;
+  grid-template-rows: subgrid;
+  row-gap: 6px;
+  min-height: 0;
+  min-width: 0;
+  padding: 0;
+}
+.opt-group select { min-height: 44px; padding: 0 8px; font-size: 0.95rem; min-width: 0; }
+.opt-label {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding-left: 2px;
+}
+#s-new { grid-column: 3; grid-row: 2 / span 2; }
 
 #sort-view .board-wrap {
   flex: 1 1 0;     /* take the leftover height; tubes are sized to fit it */
