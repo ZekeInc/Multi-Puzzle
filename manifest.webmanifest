@@ -1,13 +1,13 @@
 {
   "name": "Multi Puzzle",
   "short_name": "Multi Puzzle",
-  "description": "Multi Puzzle: Sudoku and Groups logic puzzles with no ads.",
+  "description": "Multi Puzzle: Sudoku, Groups and Sort logic puzzles with no ads.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#f6f7f9",
-  "theme_color": "#2b59c3",
+  "background_color": "#12151c",
+  "theme_color": "#12151c",
   "icons": [
     { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
     { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },

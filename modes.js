@@ -1,10 +1,10 @@
-// Switches between game modes (Sudoku / Groups) and remembers the last one.
+// Switches between game modes (Sudoku / Groups / Sort) and remembers the last one.
 // Each game listens for the "modechange" event to pause or resume its timer.
 (function () {
   'use strict';
 
   const KEY = 'game-mode';
-  const MODES = ['sudoku', 'groups'];
+  const MODES = ['sudoku', 'groups', 'sort'];
 
   function setMode(mode, announce) {
     if (!MODES.includes(mode)) mode = 'sudoku';
