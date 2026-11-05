@@ -47,22 +47,24 @@
     },
   };
 
+  // Read from storage once and kept in memory: the games ask for their best
+  // time on every redraw.
+  let cache = null;
   function readAll() {
-    try {
-      return JSON.parse(localStorage.getItem(KEY)) || {};
-    } catch (e) {
-      return {};
+    if (!cache) {
+      try { cache = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { cache = {}; }
     }
+    return cache;
   }
 
   function writeAll(data) {
+    cache = data;
     try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) { /* ignore */ }
   }
+  // Another tab of the app changed the best times.
+  window.addEventListener('storage', (e) => { if (e.key === KEY || e.key === null) cache = null; });
 
-  function formatTime(ms) {
-    const secs = Math.floor(ms / 1000);
-    return `${String(Math.floor(secs / 60)).padStart(2, '0')}:${String(secs % 60).padStart(2, '0')}`;
-  }
+  const formatTime = GameMode.formatTime;
 
   function get(game, key) {
     return readAll()[`${game}:${key}`] || { best: null, solved: 0 };
@@ -86,6 +88,14 @@
   function bestLabel(game, key) {
     const { best } = get(game, key);
     return best === null ? 'Best: --:--' : `Best: ${formatTime(best)}`;
+  }
+
+  // End of the win message for a record() result.
+  function verdict(result, hintsUsed, hintNote) {
+    if (result.isNew && result.previous !== null) return ` 🏆 New best (was ${formatTime(result.previous)})`;
+    if (result.isNew) return ' 🏆 First best time';
+    if (hintsUsed) return ` 🎉 ${hintNote || 'Hint used, so not counted as a best time.'}`;
+    return ' 🎉';
   }
 
   // ---------- "Best times" pop-up ----------
@@ -136,17 +146,11 @@
     }
   }
 
-  function show(open) {
-    if (open) renderTable();
-    modal.hidden = !open;
-    openBtn.setAttribute('aria-expanded', String(open));
-    if (open) document.getElementById('scores-close').focus();
-  }
+  const closeBtn = document.getElementById('scores-close');
+  const show = GameMode.popup(modal, openBtn, closeBtn);
 
-  openBtn.addEventListener('click', () => show(true));
-  document.getElementById('scores-close').addEventListener('click', () => show(false));
-  modal.addEventListener('click', (e) => { if (e.target === modal) show(false); });
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !modal.hidden) show(false); });
+  openBtn.addEventListener('click', () => { renderTable(); show(true); });
+  closeBtn.addEventListener('click', () => show(false));
   document.getElementById('scores-reset').addEventListener('click', () => {
     if (!confirm('Reset all best times? This cannot be undone.')) return;
     writeAll({});
@@ -154,5 +158,5 @@
     window.dispatchEvent(new CustomEvent('scoreschange'));
   });
 
-  window.Scores = { get, record, bestLabel, formatTime };
+  window.Scores = { get, record, bestLabel, verdict };
 })();

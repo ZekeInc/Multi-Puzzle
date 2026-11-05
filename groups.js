@@ -54,85 +54,122 @@
   function growRegions(n, solution) {
     const regions = new Array(n * n).fill(-1);
     const sizes = new Array(n).fill(1);
+    // Frontier of (cell, group) pairs: an empty cell next to a cell of that group,
+    // once per such neighbour. Pairs whose cell has since been taken are dropped
+    // when drawn, so every draw is uniform over the live pairs.
+    const cells = [], groups = [];
+    const claim = (i, g) => {
+      regions[i] = g;
+      for (const j of neighbors4(i, n)) if (regions[j] === -1) { cells.push(j); groups.push(g); }
+    };
     solution.forEach((c, r) => { regions[r * n + c] = r; });
-    let left = n * n - n;
-    while (left > 0) {
-      // Collect (cell, group) frontier pairs and pick one, favouring small groups
-      // so sizes stay varied but not wildly lopsided.
-      const options = [];
-      for (let i = 0; i < n * n; i++) {
-        if (regions[i] !== -1) continue;
-        for (const j of neighbors4(i, n)) {
-          if (regions[j] !== -1) options.push([i, regions[j]]);
-        }
+    solution.forEach((c, r) => claim(r * n + c, r));
+    const draw = () => {
+      for (;;) {
+        const k = randInt(cells.length);
+        if (regions[cells[k]] === -1) return k;
+        cells[k] = cells[cells.length - 1]; cells.pop();
+        groups[k] = groups[groups.length - 1]; groups.pop();
       }
-      let best = null, bestScore = Infinity;
-      for (let k = 0; k < 3; k++) {
-        const o = options[randInt(options.length)];
-        const score = sizes[o[1]] + Math.random() * n;
-        if (score < bestScore) { bestScore = score; best = o; }
+    };
+    for (let left = n * n - n; left > 0; left--) {
+      // Pick one of three random pairs, favouring small groups so sizes stay
+      // varied but not wildly lopsided.
+      let cell = -1, g = -1, bestScore = Infinity;
+      for (let t = 0; t < 3; t++) {
+        const k = draw();
+        const score = sizes[groups[k]] + Math.random() * n;
+        if (score < bestScore) { bestScore = score; cell = cells[k]; g = groups[k]; }
       }
-      regions[best[0]] = best[1];
-      sizes[best[1]]++;
-      left--;
+      sizes[g]++;
+      claim(cell, g);
     }
     return regions;
   }
 
   // Rows, columns and groups ("units": each needs exactly one O), and for each
-  // square the units it belongs to and the squares an O there rules out.
-  function board(n, regions) {
-    const N = n * n, units = [];
-    for (let r = 0; r < n; r++) units.push([...Array(n).keys()].map((c) => r * n + c));
-    for (let c = 0; c < n; c++) units.push([...Array(n).keys()].map((r) => r * n + c));
-    for (let g = 0; g < n; g++) units.push([]);
-    regions.forEach((g, i) => units[2 * n + g].push(i));
-    const unitsOf = [...Array(N)].map((_, i) => [Math.floor(i / n), n + (i % n), 2 * n + regions[i]]);
-    const kills = [...Array(N)].map((_, i) => {
-      const s = new Set();
-      for (const k of unitsOf[i]) for (const j of units[k]) s.add(j);
+  // square the units it belongs to. An O on square i rules out `near[i]` (its
+  // row, column and touching squares, i included) and every square of its group.
+  // `near` only depends on n, so it is worked out once per size.
+  const geometry = {};
+  function geometryOf(n) {
+    if (geometry[n]) return geometry[n];
+    const N = n * n, rows = [], cols = [], near = [];
+    for (let r = 0; r < n; r++) rows.push([...Array(n).keys()].map((c) => r * n + c));
+    for (let c = 0; c < n; c++) cols.push([...Array(n).keys()].map((r) => r * n + c));
+    for (let i = 0; i < N; i++) {
       const r = Math.floor(i / n), c = i % n;
-      for (let dr = -1; dr <= 1; dr++) {
-        for (let dc = -1; dc <= 1; dc++) {
-          const rr = r + dr, cc = c + dc;
-          if (rr >= 0 && rr < n && cc >= 0 && cc < n) s.add(rr * n + cc);
+      const s = rows[r].concat(cols[c].filter((j) => j !== i));
+      for (let rr = Math.max(0, r - 1); rr <= Math.min(n - 1, r + 1); rr++) {
+        for (let cc = Math.max(0, c - 1); cc <= Math.min(n - 1, c + 1); cc++) {
+          if (rr !== r && cc !== c) s.push(rr * n + cc);
         }
       }
-      return [...s]; // includes i itself
-    });
-    return { n, N, units, unitsOf, kills };
+      near.push(s);
+    }
+    return (geometry[n] = { rows, cols, near });
+  }
+
+  function board(n, regions) {
+    const N = n * n, geo = geometryOf(n);
+    const units = geo.rows.concat(geo.cols);
+    for (let g = 0; g < n; g++) units.push([]);
+    for (let i = 0; i < N; i++) units[2 * n + regions[i]].push(i);
+    const unitsOf = new Array(N);
+    for (let i = 0; i < N; i++) unitsOf[i] = [Math.floor(i / n), n + (i % n), 2 * n + regions[i]];
+    return { n, N, units, unitsOf, near: geo.near };
   }
 
   // Counts solutions up to `limit`. Returns { count, solutions }.
   // Depth-first, always filling the unit with the fewest candidate squares.
+  // One candidate array is shared by the whole search: each step records the
+  // squares it rules out on a trail and puts them back when it backtracks, and
+  // `left` keeps each unit's candidate count up to date.
   function solve(n, regions, limit) {
     limit = limit || 2;
-    const b = board(n, regions);
+    const { N, units, unitsOf, near } = board(n, regions);
+    const U = 3 * n;
+    const cand = new Uint8Array(N).fill(1);
+    const left = Int32Array.from(units, (u) => u.length);
+    const done = new Uint8Array(U);
+    const trail = new Int32Array(N);
+    let top = 0;
     const cols = new Array(n);
     const solutions = [];
-    (function search(cand, done, placed) {
+    (function search(placed) {
       if (placed === n) {
         solutions.push(cols.slice());
         return solutions.length >= limit;
       }
       let best = -1, bestCount = Infinity;
-      for (let k = 0; k < 3 * n; k++) {
-        if (done[k]) continue;
-        let count = 0;
-        for (const i of b.units[k]) count += cand[i];
-        if (count < bestCount) { bestCount = count; best = k; if (count < 2) break; }
+      for (let k = 0; k < U; k++) {
+        if (!done[k] && left[k] < bestCount) { bestCount = left[k]; best = k; if (bestCount < 2) break; }
       }
       if (bestCount === 0) return false;
-      for (const i of b.units[best]) {
+      for (const i of units[best]) {
         if (!cand[i]) continue;
-        const nc = cand.slice(), nd = done.slice();
-        for (const j of b.kills[i]) nc[j] = 0;
-        for (const k of b.unitsOf[i]) nd[k] = 1;
-        cols[Math.floor(i / n)] = i % n;
-        if (search(nc, nd, placed + 1)) return true;
+        const mark = top;
+        const [r, c, g] = unitsOf[i];
+        for (const list of [near[i], units[g]]) {
+          for (const j of list) {
+            if (!cand[j]) continue;
+            cand[j] = 0;
+            trail[top++] = j;
+            for (const k of unitsOf[j]) left[k]--;
+          }
+        }
+        done[r] = done[c] = done[g] = 1;
+        cols[r] = i % n;
+        if (search(placed + 1)) return true;
+        done[r] = done[c] = done[g] = 0;
+        while (top > mark) {
+          const j = trail[--top];
+          cand[j] = 1;
+          for (const k of unitsOf[j]) left[k]++;
+        }
       }
       return false;
-    })(new Uint8Array(b.N).fill(1), new Uint8Array(3 * n), 0);
+    })(0);
     return { count: solutions.length, solutions };
   }
 
@@ -147,15 +184,15 @@
   const STEP_SCORE = [0, 0, 1, 4, 10];
 
   function grade(n, regions) {
-    const b = board(n, regions);
-    const { N, units, unitsOf, kills } = b;
+    const { N, units, unitsOf, near } = board(n, regions);
     const U = 3 * n;
     let cand = new Uint8Array(N).fill(1);
     let done = new Uint8Array(U);
     let placed = 0;
 
     function place(i) {
-      for (const j of kills[i]) cand[j] = 0;
+      for (const j of near[i]) cand[j] = 0;
+      for (const j of units[unitsOf[i][2]]) cand[j] = 0;
       for (const k of unitsOf[i]) done[k] = 1;
       placed++;
     }
@@ -173,13 +210,15 @@
       }
     }
 
+    const gone = new Int32Array(N).fill(-1);   // gone[j] === i: an O on i rules out j
     function wipesOut() {
       for (let i = 0; i < N; i++) {
         if (!cand[i]) continue;
-        const gone = new Set(kills[i]);
+        for (const j of near[i]) gone[j] = i;
+        for (const j of units[unitsOf[i][2]]) gone[j] = i;
         for (let k = 0; k < U; k++) {
           if (done[k] || unitsOf[i].includes(k)) continue;
-          if (units[k].every((j) => !cand[j] || gone.has(j))) { cand[i] = 0; return true; }
+          if (units[k].every((j) => !cand[j] || gone[j] === i)) { cand[i] = 0; return true; }
         }
       }
       return false;
@@ -309,7 +348,8 @@
     const deadline = Date.now() + BUDGET_MS;
     const pool = [];
     while (pool.length < POOL && (pool.length < 3 || Date.now() < deadline)) {
-      const p = generateOne(n);
+      let p;
+      try { p = generateOne(n); } catch (err) { if (pool.length) break; throw err; }
       p.grade = grade(n, p.regions);
       pool.push(p);
       if (level === 'easy' && p.grade.score === 0) break; // can't get easier

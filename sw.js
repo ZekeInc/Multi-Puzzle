@@ -1,6 +1,6 @@
 // Service worker: caches the app so it works offline once installed.
 // Bump CACHE when files change so phones pick up the new version.
-const CACHE = 'multi-puzzle-v28';
+const CACHE = 'multi-puzzle-v29';
 const FILES = [
   './',
   'index.html',
@@ -39,16 +39,27 @@ self.addEventListener('activate', (event) => {
 // Network first so updates show up when online; fall back to the cache offline.
 // 'no-cache' makes the browser check with the server instead of reusing a
 // stale copy from its own HTTP cache, so a new page never gets old files.
+// On a weak connection, the cached copy is used if the network hasn't answered
+// within TIMEOUT_MS (the network copy is still saved for next time).
+const TIMEOUT_MS = 3000;
+
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
-  event.respondWith(
-    fetch(req.url, { cache: 'no-cache', credentials: 'same-origin' })
-      .then((response) => {
+  let saving;
+  const network = fetch(req.url, { cache: 'no-cache', credentials: 'same-origin' })
+    .then((response) => {
+      if (response.ok) {
         const copy = response.clone();
-        caches.open(CACHE).then((cache) => cache.put(req, copy));
-        return response;
-      })
-      .catch(() => caches.match(req, { ignoreSearch: true }))
+        saving = caches.open(CACHE).then((cache) => cache.put(req, copy));
+      }
+      return response;
+    });
+  event.waitUntil(network.then(() => saving, () => {}));
+  const cached = () => caches.match(req, { ignoreSearch: true });
+  const slow = new Promise((resolve) => setTimeout(resolve, TIMEOUT_MS)).then(cached);
+  event.respondWith(
+    Promise.race([network, slow.then((r) => r || network)])
+      .catch(() => cached().then((r) => r || network))
   );
 });

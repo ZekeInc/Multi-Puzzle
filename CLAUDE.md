@@ -12,12 +12,12 @@ Installable as a home-screen app and works offline.
 | `index.html` | All markup: tab bar, one `<section class="view">` per game, pop-ups (rules, best times, Groups and Sort preferences) |
 | `style.css` | All styles. Theme colours are CSS variables on `:root` (light) and `:root[data-theme="dark"]` |
 | `theme.js` | Light/dark toggle. Dark is the default; an inline script in `<head>` applies the saved theme before the page draws |
-| `modes.js` | Tab switching. Fires a `modechange` event; `GameMode.isActive('sudoku' \| 'groups' \| 'sort')` |
-| `scores.js` | Best times per game and difficulty/size, plus the 🏆 Best times pop-up (`Scores.record`, `Scores.bestLabel`) |
+| `modes.js` | Tab switching (fires `modechange`; `GameMode.isActive('sudoku' \| 'groups' \| 'sort')`) and the pieces the games share: `GameMode.timer`, `popup`, `message`, `buzz`, `formatTime`, `whenShown` |
+| `scores.js` | Best times per game and difficulty/size, plus the 🏆 Best times pop-up (`Scores.record`, `Scores.bestLabel`, `Scores.verdict` = end of the win message). Kept in memory after the first read |
 | `sudoku.js` / `app.js` | Sudoku logic (generator, solver) / Sudoku UI |
 | `groups.js` / `groups-app.js` | Groups logic (unique-solution generator, difficulty grader) / Groups UI |
 | `sort.js` / `sort-app.js` | Sort logic (rules, solver, solvable generator) / Sort UI |
-| `sw.js` | Service worker: offline cache, network-first |
+| `sw.js` | Service worker: offline cache, network-first (falls back to the cached copy if the network takes over 3 s) |
 | `manifest.webmanifest`, `icons/` | Home-screen install. `icon.svg` is the source; PNGs are rendered from it (`icon-maskable-512.png` has the art scaled to 88% for Android masks) |
 
 Logic files (`sudoku.js`, `groups.js`, `sort.js`) have no DOM code and can be loaded in Node
@@ -28,9 +28,17 @@ with `require()` for testing.
 - **Cache busting:** when changing any CSS/JS file, bump its `?v=` number in `index.html` and
   bump `CACHE` in `sw.js`, so installed copies pick up the change. If you add a file, add it to
   the `FILES` list in `sw.js` too.
-- **Each game** keeps its own state, timer and saved progress in `localStorage`
-  (`sudoku-save-v1`, `groups-save-v1`, `sort-save-v1`). Timers pause when the game's tab is
-  hidden or the app goes to the background.
+- **Each game** keeps its own state and saved progress in `localStorage`
+  (`sudoku-save-v1`, `groups-save-v1`, `sort-save-v1`). Its timer comes from
+  `GameMode.timer(mode, el, canRun, save)` (`start`, `pause`, `reset(ms)`, `ms()`, `show()`), which
+  pauses and saves when the game's tab is hidden or the app goes to the background; one shared
+  tick redraws only the showing timer.
+- **Pop-ups** use `GameMode.popup(modal, openButton, focusEl, dismiss)`: Escape and tapping outside
+  call `dismiss` (default: close), and closing refocuses the opening button.
+- **Speed:** on first launch Groups and Sort only make a puzzle when their tab is first opened
+  (`GameMode.whenShown`). Redraws skip squares whose look hasn't changed (`shown[]` in Sudoku and
+  Groups); Sort only re-measures its layout when the box count or size changes (resizes go through
+  a `ResizeObserver`). The solvers keep one working array and undo on backtrack instead of copying.
 - **Hints / Solve** mark a game as assisted, so it can't set a best time.
 - **Themes:** check UI changes in both dark and light. Don't use `prefers-color-scheme`; the
   theme comes from `data-theme` on `<html>`.
@@ -51,6 +59,8 @@ with `require()` for testing.
   with one square left, (2) ✕ on a square whose O would wipe out a unit, (3) k groups confined to k rows/columns
   (any mix of unit kinds), (4) ✕ on a square whose O, after forced follow-ups, wipes out a unit. Returns
   `{ technique, score }` (score weights steps 2/3/4 as 1/4/10; technique 5 = needs guessing).
+- `Groups.solve` keeps per-unit candidate counts and a trail it undoes on backtrack; the
+  row/column/neighbour squares an O rules out (`near`) are cached per size.
 - `Groups.generate(n, level)` deals up to 12 puzzles (1 s budget, at least 3), ranks them by score and takes the
   easiest (Easy), middle (Medium) or hardest (Hard).
 - Colour boxes (`#g-groups`, `.g-chip`) above the board, one per group in board reading order: an O once the

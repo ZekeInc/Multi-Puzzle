@@ -30,25 +30,34 @@
     return true;
   }
 
+  const BOX = [...Array(81).keys()].map((i) => 3 * Math.floor(i / 27) + Math.floor((i % 9) / 3));
+
   // Counts solutions (stopping at `limit`) and returns the first one found.
+  // Each row, column and box keeps a bitmask of the numbers it already holds
+  // (bit n set = n is used), so a square's candidates are one OR away.
   function countSolutions(board, limit, randomize) {
     const b = board.slice();
+    const rows = new Int32Array(9), cols = new Int32Array(9), boxes = new Int32Array(9);
+    for (let i = 0; i < 81; i++) {
+      if (!b[i]) continue;
+      const bit = 1 << b[i];
+      rows[Math.floor(i / 9)] |= bit; cols[i % 9] |= bit; boxes[BOX[i]] |= bit;
+    }
     let count = 0;
     let first = null;
 
     function search() {
       // Pick the empty cell with the fewest candidates.
-      let bestIdx = -1;
-      let bestCands = null;
+      let bestIdx = -1, bestUsed = 0, bestCount = 10;
       for (let i = 0; i < 81; i++) {
         if (b[i] !== 0) continue;
-        const cands = [];
-        for (let n = 1; n <= 9; n++) if (canPlace(b, i, n)) cands.push(n);
-        if (cands.length === 0) return false;
-        if (!bestCands || cands.length < bestCands.length) {
-          bestIdx = i;
-          bestCands = cands;
-          if (cands.length === 1) break;
+        const used = rows[Math.floor(i / 9)] | cols[i % 9] | boxes[BOX[i]];
+        let n = 9;
+        for (let m = used >> 1; m; m >>= 1) n -= m & 1;
+        if (n === 0) return false;
+        if (n < bestCount) {
+          bestIdx = i; bestUsed = used; bestCount = n;
+          if (n === 1) break;
         }
       }
       if (bestIdx === -1) {
@@ -56,10 +65,17 @@
         if (!first) first = b.slice();
         return count >= limit;
       }
-      if (randomize) shuffle(bestCands);
-      for (const n of bestCands) {
+      const cands = [];
+      for (let n = 1; n <= 9; n++) if (!(bestUsed & (1 << n))) cands.push(n);
+      if (randomize) shuffle(cands);
+      const r = Math.floor(bestIdx / 9), c = bestIdx % 9, x = BOX[bestIdx];
+      for (const n of cands) {
+        const bit = 1 << n;
         b[bestIdx] = n;
-        if (search()) return true;
+        rows[r] |= bit; cols[c] |= bit; boxes[x] |= bit;
+        const stop = search();
+        rows[r] &= ~bit; cols[c] &= ~bit; boxes[x] &= ~bit;
+        if (stop) return true;
       }
       b[bestIdx] = 0;
       return false;
