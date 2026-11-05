@@ -49,8 +49,8 @@ with `require()` for testing.
   4–10 colours, but at most 9 with 1 extra box (larger deals are rarely solvable).
 - Win when no box holds more than one colour; any colour split across boxes is then gathered
   into one full box automatically (`tidyMoves` in `sort-app.js`, not counted as moves).
-- Squares use the muted palette `--s0`–`--s9` and show numbers 1–10. Colour 7 (walnut,
-  index 6) uses a white number (`LIGHT_INK`).
+- Squares use the muted palette `--s0`–`--s9` and show numbers 1–10, all in the same dark ink.
+  Keep every colour light enough for dark numbers (contrast with `#1d2330` of at least 4:1).
 - Selecting a box changes nothing on the box itself: the squares that would move (its top run of one colour, `Sort.topRun`) get a halo (`.square.lifted`, `--halo`). Nothing moves. A completed box (full, one colour) closes
   its top. Boxes are sized to the available space in 1–3 rows by `layout()`.
 

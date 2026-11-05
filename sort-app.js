@@ -3,7 +3,6 @@
 
   const SAVE_KEY = 'sort-save-v1';
   const CAP = Sort.CAPACITY;
-  const LIGHT_INK = new Set([6]);   // colours dark enough to need a white number
   const MAX_COLORS_WITH_ONE_EXTRA = 9;
   const isActive = () => GameMode.isActive('sort');
 
@@ -160,7 +159,6 @@
         sq.className = 'square';
         sq.style.setProperty('--c', `var(--s${c})`);
         sq.textContent = c + 1;
-        if (LIGHT_INK.has(c)) sq.classList.add('ink-light');
         if (k >= tube.length - (arrived[t] || 0)) sq.classList.add('arrived');
         if (k >= tube.length - lifted) sq.classList.add('lifted');
         btn.appendChild(sq);
