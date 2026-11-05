@@ -272,7 +272,7 @@
     const el = boardEl.children[t];
     if (el) {
       el.classList.add('blocked');
-      setTimeout(() => el.classList.remove('blocked'), 300);
+      setTimeout(() => el.classList.remove('blocked'), 150);
     }
     buzz(40);
   }

@@ -47,7 +47,7 @@
     --error: #ff7b7b;
     --error-bg: #3a1f24;
     --accent: #7ea6ff;
-    --halo: #ffffff;
+    --halo: rgb(255 255 255 / 0.7);
     --on-accent: #12151c;
 
     --g0: #9a5252; --g1: #9c6a3c; --g2: #8f7f32; --g3: #557f41; --g4: #2f7d72;
@@ -508,7 +508,7 @@ button:active { transform: scale(0.96); }
 .tube.done { border-top-color: var(--line-strong); }
 .tube.done.hint-from, .tube.done.hint-to { border-top-color: var(--accent); }
 .tube.hint-from, .tube.hint-to { border-color: var(--accent); border-top-color: transparent; border-style: dashed; }
-.tube.blocked { animation: shake 0.3s; }
+.tube.blocked { animation: shake 0.15s; }
 
 .square {
   flex: 0 0 auto;
@@ -535,8 +535,8 @@ button:active { transform: scale(0.96); }
 }
 @keyframes shake {
   0%, 100% { translate: 0; }
-  25% { translate: -4px; }
-  75% { translate: 4px; }
+  25% { translate: -3px; }
+  75% { translate: 3px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .square.arrived, .tube.blocked, .s-board.solved .tube.done { animation: none; }
