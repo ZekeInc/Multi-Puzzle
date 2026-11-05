@@ -1,16 +1,27 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" fill="#2b59c3"/>
-  <rect x="96" y="96" width="320" height="320" rx="20" fill="#ffffff"/>
-  <g stroke="#2b59c3" stroke-width="10">
-    <line x1="203" y1="96" x2="203" y2="416"/>
-    <line x1="309" y1="96" x2="309" y2="416"/>
-    <line x1="96" y1="203" x2="416" y2="203"/>
-    <line x1="96" y1="309" x2="416" y2="309"/>
+  <!-- Multi Puzzle: Sudoku (top left), Groups (top right), Sort (bottom). -->
+  <rect width="512" height="512" fill="#12151c"/>
+  <g transform="translate(100 100)">
+    <rect width="148" height="148" rx="22" fill="#f6f7f9"/>
+    <path d="M49.3 12V136M98.7 12V136M12 49.3H136M12 98.7H136" stroke="#c9ced8" stroke-width="4"/>
+    <g font-family="Helvetica, Arial, sans-serif" font-weight="700" font-size="38" text-anchor="middle">
+      <text x="24.7" y="37.7" fill="#1d2330">5</text>
+      <text x="74.0" y="87.0" fill="#2b59c3">3</text>
+      <text x="123.3" y="136.3" fill="#1d2330">9</text>
+    </g>
   </g>
-  <g font-family="Helvetica, Arial, sans-serif" font-weight="700" font-size="80" fill="#1d2330" text-anchor="middle">
-    <text x="150" y="178">5</text>
-    <text x="256" y="284">3</text>
-    <text x="362" y="390">9</text>
+  <g transform="translate(264 100)">
+    <clipPath id="gclip"><rect width="148" height="148" rx="22"/></clipPath>
+    <g clip-path="url(#gclip)">
+      <rect x="0.0" y="0.0" width="49.8" height="49.8" fill="#f4a6a6"/><rect x="49.3" y="0.0" width="49.8" height="49.8" fill="#f4a6a6"/><rect x="98.7" y="0.0" width="49.8" height="49.8" fill="#a5c4f2"/><rect x="0.0" y="49.3" width="49.8" height="49.8" fill="#f4a6a6"/><rect x="49.3" y="49.3" width="49.8" height="49.8" fill="#b6e09c"/><rect x="98.7" y="49.3" width="49.8" height="49.8" fill="#a5c4f2"/><rect x="0.0" y="98.7" width="49.8" height="49.8" fill="#b6e09c"/><rect x="49.3" y="98.7" width="49.8" height="49.8" fill="#b6e09c"/><rect x="98.7" y="98.7" width="49.8" height="49.8" fill="#a5c4f2"/>
+      <path d="M49.3 0V148M0 49.3H148M98.7 0V148M0 98.7H148" stroke="#1d2330" stroke-opacity="0.35" stroke-width="2"/>
+      <path d="M98.7 0.0V49.3M49.3 49.3V98.7M49.3 49.3H98.7M98.7 49.3V98.7M0.0 98.7H49.3M98.7 98.7V148.0" stroke="#1d2330" stroke-width="7" stroke-linecap="square"/>
+    </g>
+    <circle cx="24.7" cy="24.7" r="15" fill="none" stroke="#1d2330" stroke-width="7"/>
+    <path d="M63.0 13.7l22 22M85.0 13.7l-22 22M13.7 63.0l22 22M35.7 63.0l-22 22M63.0 63.0l22 22M85.0 63.0l-22 22" stroke="#1d2330" stroke-opacity="0.5" stroke-width="5.5" stroke-linecap="round"/>
   </g>
-  <text x="362" y="178" font-family="Helvetica, Arial, sans-serif" font-weight="700" font-size="80" fill="#2b59c3" text-anchor="middle">7</text>
+  <g transform="translate(100 264)">
+    <rect width="312" height="148" rx="22" fill="#1f2531"/>
+    <path d="M27.2 14.5V137.5H71.2V14.5" fill="none" stroke="#c4cad6" stroke-width="5" stroke-linejoin="round"/><rect x="33.2" y="105.5" width="32" height="26" rx="3" fill="#c0694e"/><rect x="33.2" y="76.5" width="32" height="26" rx="3" fill="#d6a54f"/><path d="M98.4 14.5V137.5H142.4V14.5" fill="none" stroke="#c4cad6" stroke-width="5" stroke-linejoin="round"/><path d="M98.4 14.5H142.4" stroke="#c4cad6" stroke-width="5" stroke-linecap="round"/><rect x="104.4" y="105.5" width="32" height="26" rx="3" fill="#8daa78"/><rect x="104.4" y="76.5" width="32" height="26" rx="3" fill="#8daa78"/><rect x="104.4" y="47.5" width="32" height="26" rx="3" fill="#8daa78"/><rect x="104.4" y="18.5" width="32" height="26" rx="3" fill="#8daa78"/><path d="M169.6 14.5V137.5H213.6V14.5" fill="none" stroke="#c4cad6" stroke-width="5" stroke-linejoin="round"/><rect x="175.6" y="105.5" width="32" height="26" rx="3" fill="#5f84ad"/><rect x="175.6" y="76.5" width="32" height="26" rx="3" fill="#c0694e"/><rect x="175.6" y="47.5" width="32" height="26" rx="3" fill="#5f84ad"/><path d="M240.8 14.5V137.5H284.8V14.5" fill="none" stroke="#c4cad6" stroke-width="5" stroke-linejoin="round"/>
+  </g>
 </svg>
