@@ -30,16 +30,16 @@ Every puzzle is randomly generated and has exactly one solution.
 - Undo, clear, check and hint; timer and progress saved per mode
 
 ## Sort mode
-Tubes hold stacks of coloured squares: one tube per colour, plus 1–3 empty extra tubes.
-Tap a tube to pick up its top square (and any matching squares under it), then tap another
-tube to drop them. You can only drop onto an empty tube or the same colour, and each tube
-holds 4 squares. The puzzle is solved when no tube holds more than one colour; any colour
-left split across tubes is then gathered into one full tube automatically.
+Boxes hold stacks of numbered, coloured squares: one box per number, plus 1–3 empty extra boxes.
+Tap a box to pick up its top square (and any matching squares under it), then tap another
+box to drop them. You can only drop onto an empty box or the same number, and each box
+holds 4 squares. The puzzle is solved when no box holds more than one number; any number
+left split across boxes is then gathered into one full box automatically, and full boxes close.
 
-- 4–10 colours and 1–3 extra tubes (up to 9 colours with 1 extra tube)
+- 4–10 colours and 1–3 extra boxes (up to 9 colours with 1 extra box)
 - Every puzzle is checked by a solver to make sure it can be won
 - Undo, restart, hints, and a warning when no moves are left
-- Each colour also has its own symbol, so colours are easy to tell apart
+- Muted, natural colours, each with its own number (1–10)
 
 ## Best times
 Tap the 🏆 button to see your fastest time and number of puzzles solved for every

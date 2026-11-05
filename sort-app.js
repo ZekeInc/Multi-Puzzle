@@ -3,7 +3,7 @@
 
   const SAVE_KEY = 'sort-save-v1';
   const CAP = Sort.CAPACITY;
-  const SYMBOLS = ['●', '▲', '■', '◆', '★', '✚', '♥', '♣', '♠', '✦'];
+  const LIGHT_INK = new Set([6]);   // colours dark enough to need a white number
   const MAX_COLORS_WITH_ONE_EXTRA = 9;
   const isActive = () => GameMode.isActive('sort');
 
@@ -143,7 +143,6 @@
   function render(arrivedTube, arrivedCount) {
     layout();
     const sel = state.selected;
-    const selRun = sel >= 0 ? runLength(state.tubes[sel]) : 0;
     boardEl.replaceChildren();
     state.tubes.forEach((tube, t) => {
       const btn = document.createElement('button');
@@ -151,15 +150,14 @@
       btn.dataset.index = t;
       if (t === sel) btn.classList.add('selected');
       if (tubeDone(tube)) btn.classList.add('done');
-      const names = tube.map((c) => SYMBOLS[c]).join(' ');
-      btn.setAttribute('aria-label', `Tube ${t + 1}: ${tube.length ? names : 'empty'}${t === sel ? ', selected' : ''}`);
+      const names = tube.map((c) => c + 1).join(', ');
+      btn.setAttribute('aria-label', `Box ${t + 1}: ${tube.length ? names : 'empty'}${t === sel ? ', selected' : ''}`);
       tube.forEach((c, k) => {
         const sq = document.createElement('span');
         sq.className = 'square';
         sq.style.setProperty('--c', `var(--s${c})`);
-        sq.textContent = SYMBOLS[c];
-        if (c === 2) sq.classList.add('light');
-        if (t === sel && k >= tube.length - selRun) sq.classList.add('lifted');
+        sq.textContent = c + 1;
+        if (LIGHT_INK.has(c)) sq.classList.add('ink-light');
         if (t === arrivedTube && k >= tube.length - arrivedCount) sq.classList.add('arrived');
         btn.appendChild(sq);
       });
@@ -168,12 +166,6 @@
     movesEl.textContent = `Moves: ${state.moves}`;
     timerEl.textContent = Scores.formatTime(elapsedMs());
     renderBest();
-  }
-
-  function runLength(tube) {
-    let n = 0;
-    for (let k = tube.length - 1; k >= 0 && tube[k] === tube[tube.length - 1]; k--) n++;
-    return n;
   }
 
   function renderBest() {
@@ -310,7 +302,7 @@
     const a = boardEl.children[from], b = boardEl.children[to];
     a.classList.add('hint-from');
     b.classList.add('hint-to');
-    setMessage(`Move from tube ${from + 1} to tube ${to + 1}.`);
+    setMessage(`Move from box ${from + 1} to box ${to + 1}.`);
     save();
   }
 
@@ -382,7 +374,7 @@
     if (confirmNew()) {
       boardEl.classList.remove('solved');
       newGame();
-      if (adjusted) setTimeout(() => setMessage('With 1 extra tube the most colours is 9.'), 40);
+      if (adjusted) setTimeout(() => setMessage('With 1 extra box the most colours is 9.'), 40);
     } else {
       colorsEl.value = String(state.colors);
       extraEl.value = String(state.extra);
