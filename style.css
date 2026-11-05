@@ -540,8 +540,8 @@ button:active { transform: scale(0.96); }
 }
 /* A completed tube (all of one colour) closes its top. */
 .tube.done { border-top-color: var(--line-strong); }
-.tube.done.hint-from, .tube.done.hint-to { border-top-color: var(--accent); }
-.tube.hint-from, .tube.hint-to { border-color: var(--accent); border-top-color: transparent; border-style: dashed; }
+.tube.done.hint-to { border-top-color: var(--accent); }
+.tube.hint-to { border-color: var(--accent); border-top-color: transparent; border-style: dashed; }
 .tube.blocked { animation: shake 0.15s; }
 
 .square {

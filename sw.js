@@ -1,6 +1,6 @@
 // Service worker: caches the app so it works offline once installed.
 // Bump CACHE when files change so phones pick up the new version.
-const CACHE = 'multi-puzzle-v20';
+const CACHE = 'multi-puzzle-v21';
 const FILES = [
   './',
   'index.html',
