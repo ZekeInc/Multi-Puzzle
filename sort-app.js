@@ -128,9 +128,9 @@
     for (let rows = 1; rows <= 3; rows++) {
       const perRow = Math.ceil(total / rows);
       const byWidth = (W - (perRow - 1) * COL_GAP) / perRow - TUBE_PAD;
-      // Tube height = 4 squares + gaps + padding + half a square of headroom.
+      // Tube height = 4 squares + gaps + padding.
       const fixed = (CAP - 1) * SQ_GAP + TUBE_PAD;
-      const byHeight = (H - LIFT - (rows - 1) * ROW_GAP - rows * fixed) / (rows * (CAP + 0.5));
+      const byHeight = (H - LIFT - (rows - 1) * ROW_GAP - rows * fixed) / (rows * CAP);
       const size = Math.min(byWidth, byHeight, 56);
       if (size > best.size + 0.5) best = { size, perRow };
     }

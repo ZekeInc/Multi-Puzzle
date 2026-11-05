@@ -481,7 +481,8 @@ button:active { transform: scale(0.96); }
   gap: 3px;
   padding: 4px;
   width: calc(var(--sq) + 12px);
-  height: calc(var(--sq) * 4.5 + 9px + 12px);
+  /* Exactly 4 squares + gaps + padding, so a full tube can close neatly. */
+  height: calc(var(--sq) * 4 + 9px + 12px);
   /* Open-top rectangle with sharp corners. */
   border: 2px solid var(--line-strong);
   border-top-color: transparent;
@@ -491,7 +492,9 @@ button:active { transform: scale(0.96); }
 }
 .tube:active { transform: none; }
 .tube.selected { transform: translateY(-10px); border-color: var(--accent); border-top-color: transparent; }
-.tube.done { border-color: var(--s3); border-top-color: transparent; background: color-mix(in srgb, var(--s3) 12%, var(--surface)); }
+/* A completed tube (full, one colour) closes its top. */
+.tube.done { border-top-color: var(--line-strong); }
+.tube.done.selected, .tube.done.hint-from, .tube.done.hint-to { border-top-color: var(--accent); }
 .tube.hint-from, .tube.hint-to { border-color: var(--accent); border-top-color: transparent; border-style: dashed; }
 .tube.hint-from { transform: translateY(-10px); }
 .tube.blocked { animation: shake 0.3s; }
