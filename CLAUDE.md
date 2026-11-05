@@ -9,7 +9,7 @@ Installable as a home-screen app and works offline.
 
 | File | Purpose |
 |---|---|
-| `index.html` | All markup: tab bar, one `<section class="view">` per game, pop-ups (rules, best times) |
+| `index.html` | All markup: tab bar, one `<section class="view">` per game, pop-ups (rules, best times, Sort preferences) |
 | `style.css` | All styles. Theme colours are CSS variables on `:root` (light) and `:root[data-theme="dark"]` |
 | `theme.js` | Light/dark toggle. Dark is the default; an inline script in `<head>` applies the saved theme before the page draws |
 | `modes.js` | Tab switching. Fires a `modechange` event; `GameMode.isActive('sudoku' \| 'groups' \| 'sort')` |
@@ -43,15 +43,29 @@ with `require()` for testing.
 
 ## Sort game notes
 
-- Player-facing text calls the containers **boxes**; the code calls them **tubes**
-  (`.tube`, `state.tubes`).
-- One box per colour plus 1–3 empty extra boxes; each holds 4 squares (`Sort.CAPACITY`).
-  4–10 colours, but at most 9 with 1 extra box (larger deals are rarely solvable).
+- Player-facing text calls the containers **boxes** and the squares **blocks**; the code calls them
+  **tubes** (`.tube`, `state.tubes`) and squares (`.square`).
+- One box per colour plus 0–3 empty extra boxes. Preferences (⚙ pop-up `#s-prefs-modal`, three
+  labelled groups; changes apply only on **New puzzle**, Cancel / Escape / tapping outside revert):
+  - **Level**: Easy / Medium / Hard / Expert / Random (`state.level`). `Sort.generate` compares up to
+    24 solvable deals (1 s budget) by how many positions the solver explored, and picks from the
+    matching quarter; Random takes the first solvable deal without grading.
+  - **Boxes**: extra (0–3) and empty spaces each colour box starts with (0–2, at most `cap - 2`).
+  - **Blocks**: colours (4–10), per box (3–6, default 4 = `Sort.CAPACITY`; `state.cap`), and
+    **Stack on same / any colour** (`state.mix`: may blocks be dropped onto a different colour).
+  Each colour has `cap - empty` blocks. 0 extra needs "any colour", and then at least
+  `Sort.minEmptyNoExtra(cap)` empty. With same colour, 1 extra and 0 empty the most colours is
+  `MAX_COLORS_TIGHT[cap]` in `sort-app.js` (larger deals are rarely solvable).
+  Logic functions take a `rules` object `{ cap, mix }` as their last argument.
+- Best-time keys: `colours-extra`, then `-cap-empty` unless 4/0, `-any` with mixing, `-level`
+  unless Random. The 🏆 pop-up lists played Sort keys from storage (`label()` in `scores.js`).
+- `Sort.solve` is a guided best-first search (moves so far + 6 × colour changes inside tubes) on
+  string-encoded tubes; it finds short solutions and its `explored` count grades difficulty.
 - Win when no box holds more than one colour; any colour split across boxes is then gathered
-  into one full box automatically (`tidyMoves` in `sort-app.js`, not counted as moves).
-- Squares use the muted palette `--s0`–`--s9` and show numbers 1–10, all in the same dark ink.
+  into one box automatically (`tidyMoves` in `sort-app.js`, not counted as moves).
+- Blocks use the muted palette `--s0`–`--s9` and show numbers 1–10, all in the same dark ink.
   Keep every colour light enough for dark numbers (contrast with `#1d2330` of at least 4:1).
-- Selecting a box changes nothing on the box itself: the squares that would move (its top run of one colour, `Sort.topRun`) get a halo (`.square.lifted`, `--halo`). Nothing moves. A completed box (full, one colour) closes
+- Selecting a box changes nothing on the box itself: the blocks that would move (its top run of one colour, `Sort.topRun`) get a halo (`.square.lifted`, `--halo`). Nothing moves. A completed box (all blocks of one colour) closes
   its top. Boxes are sized to the available space in 1–3 rows by `layout()`.
 
 ## Testing

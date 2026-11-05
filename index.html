@@ -22,7 +22,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="style.css?v=12">
+  <link rel="stylesheet" href="style.css?v=18">
 </head>
 <body>
   <main>
@@ -163,31 +163,81 @@
       </header>
 
       <div class="top-controls sort-controls">
-        <select id="s-colors" aria-label="Number of colours">
-          <option value="4">4 colours</option>
-          <option value="5">5 colours</option>
-          <option value="6" selected>6 colours</option>
-          <option value="7">7 colours</option>
-          <option value="8">8 colours</option>
-          <option value="9">9 colours</option>
-          <option value="10">10 colours</option>
-        </select>
-        <select id="s-extra" aria-label="Extra empty boxes">
-          <option value="1">1 extra</option>
-          <option value="2" selected>2 extra</option>
-          <option value="3">3 extra</option>
-        </select>
+        <button id="s-prefs" aria-expanded="false" aria-controls="s-prefs-modal">⚙ Preferences</button>
         <button id="s-new">New</button>
+      </div>
+
+      <div class="modal" id="s-prefs-modal" hidden>
+        <div class="rules prefs" role="dialog" aria-modal="true" aria-labelledby="s-prefs-title">
+          <h2 id="s-prefs-title">Preferences</h2>
+          <div class="prefs-groups">
+            <div class="opt-group" role="group" aria-labelledby="s-level-label">
+              <span class="opt-label" id="s-level-label">Level</span>
+              <select id="s-level" class="wide" aria-label="Difficulty">
+                <option value="easy">Easy</option>
+                <option value="medium" selected>Medium</option>
+                <option value="hard">Hard</option>
+                <option value="expert">Expert</option>
+                <option value="random">Random</option>
+              </select>
+            </div>
+            <div class="opt-group" role="group" aria-labelledby="s-boxes-label">
+              <span class="opt-label" id="s-boxes-label">Boxes</span>
+              <select id="s-extra" aria-label="Extra empty boxes">
+                <option value="0" disabled>0 extra</option>
+                <option value="1">1 extra</option>
+                <option value="2" selected>2 extra</option>
+                <option value="3">3 extra</option>
+              </select>
+              <select id="s-empty" aria-label="Empty spaces in each box">
+                <option value="0" selected>0 empty</option>
+                <option value="1">1 empty</option>
+                <option value="2">2 empty</option>
+              </select>
+            </div>
+            <div class="opt-group" role="group" aria-labelledby="s-blocks-label">
+              <span class="opt-label" id="s-blocks-label">Blocks</span>
+              <select id="s-colors" aria-label="Number of colours">
+                <option value="4">4 colours</option>
+                <option value="5">5 colours</option>
+                <option value="6" selected>6 colours</option>
+                <option value="7">7 colours</option>
+                <option value="8">8 colours</option>
+                <option value="9">9 colours</option>
+                <option value="10">10 colours</option>
+              </select>
+              <select id="s-cap" aria-label="Blocks per box">
+                <option value="3">3 per box</option>
+                <option value="4" selected>4 per box</option>
+                <option value="5">5 per box</option>
+                <option value="6">6 per box</option>
+              </select>
+              <select id="s-mix" class="wide" aria-label="Which blocks can be stacked on">
+                <option value="same" selected>Stack on same colour</option>
+                <option value="any">Stack on any colour</option>
+              </select>
+            </div>
+          </div>
+          <p id="s-prefs-note" class="note" role="status"></p>
+          <div class="modal-buttons">
+            <button id="s-prefs-cancel" class="secondary neutral">Cancel</button>
+            <button id="s-prefs-apply">New puzzle</button>
+          </div>
+        </div>
       </div>
 
       <div class="modal" id="s-rules-text" hidden>
         <div class="rules" role="dialog" aria-modal="true" aria-labelledby="s-rules-title">
           <h2 id="s-rules-title">How to play</h2>
-          <p>Sort the numbered squares so that <b>no box holds more than one number</b>.</p>
-          <p>Tap a box to pick up its top square (and any matching squares under it),
-          then tap another box to drop them there. You can only drop onto an
-          <b>empty box</b> or onto the <b>same number</b>, and each box holds 4 squares.</p>
-          <p>Use the extra empty boxes as space to shuffle squares around. Every puzzle can be solved.</p>
+          <p>Sort the numbered blocks so that <b>no box holds more than one number</b>.</p>
+          <p>Tap a box to pick up its top block (and any matching blocks under it),
+          then tap another box to drop them there. You can drop
+          <b id="s-stack-text">onto an empty box or onto the same number</b>,
+          and each box holds <span id="s-cap-text">4</span> blocks.</p>
+          <p>Use the extra empty boxes and empty spaces to shuffle blocks around. Every puzzle can be solved.</p>
+          <p>Tap <b>⚙ Preferences</b> to choose the <b>level</b>, the boxes (<b>extra</b> boxes and
+          <b>empty</b> spaces in each) and the blocks (<b>colours</b>, how many fit <b>per box</b>,
+          and whether they <b>stack on any colour</b>). 0 extra boxes needs “Stack on any colour”.</p>
           <button id="s-rules-close">Got it</button>
         </div>
       </div>
@@ -233,13 +283,13 @@
 
   <script src="theme.js?v=7"></script>
   <script src="modes.js?v=10"></script>
-  <script src="scores.js?v=6"></script>
+  <script src="scores.js?v=8"></script>
   <script src="sudoku.js?v=4"></script>
   <script src="app.js?v=4"></script>
   <script src="groups.js?v=4"></script>
   <script src="groups-app.js?v=4"></script>
-  <script src="sort.js?v=7"></script>
-  <script src="sort-app.js?v=13"></script>
+  <script src="sort.js?v=10"></script>
+  <script src="sort-app.js?v=18"></script>
   <script>
     if ('serviceWorker' in navigator && location.protocol !== 'file:') {
       window.addEventListener('load', () => navigator.serviceWorker.register('sw.js'));
