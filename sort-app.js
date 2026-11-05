@@ -140,7 +140,8 @@
   if (window.ResizeObserver) new ResizeObserver(layout).observe(wrapEl);
   window.addEventListener('resize', layout);
 
-  function render(arrivedTube, arrivedCount) {
+  // `arrived` maps a box index to how many squares just landed on top of it.
+  function render(arrived = {}) {
     layout();
     const sel = state.selected;
     boardEl.replaceChildren();
@@ -160,7 +161,7 @@
         sq.style.setProperty('--c', `var(--s${c})`);
         sq.textContent = c + 1;
         if (LIGHT_INK.has(c)) sq.classList.add('ink-light');
-        if (t === arrivedTube && k >= tube.length - arrivedCount) sq.classList.add('arrived');
+        if (k >= tube.length - (arrived[t] || 0)) sq.classList.add('arrived');
         if (k >= tube.length - lifted) sq.classList.add('lifted');
         btn.appendChild(sq);
       });
@@ -245,7 +246,7 @@
     state.moves++;
     state.selected = -1;
     setMessage('');
-    render(to, n);
+    render({ [to]: n });
     if (Sort.isSolved(state.tubes)) return finish() || true;
     if (!Sort.moves(state.tubes).length) setMessage('No moves left. Tap Undo or Restart.', 'bad');
     save();
@@ -324,25 +325,18 @@
   }
 
   let gameId = 0;   // bumped by newGame so a running tidy animation stops
-  const TIDY_STEP_MS = 100;   // pause between automatic tidy-up moves
+  const TIDY_DROP_MS = 220;   // let the drop animation (0.2s) finish before celebrating
 
+  // All split colours gather at the same time: one render of the tidied board,
+  // with every gathered square dropping in together.
   function animateTidy(steps, tidied, result) {
     const id = gameId;
     if (!steps.length) return celebrate(result);
-    let k = 0;
-    (function next() {
-      if (id !== gameId) return;
-      if (k >= steps.length) {
-        state.tubes = tidied;
-        return celebrate(result);
-      }
-      const [from, to] = steps[k++];
-      const n = state.tubes[from].length;
-      state.tubes = state.tubes.map((t) => t.slice());
-      state.tubes[to].push(...state.tubes[from].splice(0));
-      render(to, n);
-      setTimeout(next, TIDY_STEP_MS);
-    })();
+    const arrived = {};
+    for (const [from, to] of steps) arrived[to] = (arrived[to] || 0) + state.tubes[from].length;
+    state.tubes = tidied;
+    render(arrived);
+    setTimeout(() => { if (id === gameId) celebrate(result); }, TIDY_DROP_MS);
   }
 
   function celebrate(result) {
