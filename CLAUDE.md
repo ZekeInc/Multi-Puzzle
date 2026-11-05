@@ -9,7 +9,7 @@ Installable as a home-screen app and works offline.
 
 | File | Purpose |
 |---|---|
-| `index.html` | All markup: tab bar, one `<section class="view">` per game, pop-ups (rules, best times, Sort preferences) |
+| `index.html` | All markup: tab bar, one `<section class="view">` per game, pop-ups (rules, best times, Groups and Sort preferences) |
 | `style.css` | All styles. Theme colours are CSS variables on `:root` (light) and `:root[data-theme="dark"]` |
 | `theme.js` | Light/dark toggle. Dark is the default; an inline script in `<head>` applies the saved theme before the page draws |
 | `modes.js` | Tab switching. Fires a `modechange` event; `GameMode.isActive('sudoku' \| 'groups' \| 'sort')` |
@@ -43,7 +43,8 @@ with `require()` for testing.
 
 ## Groups game notes
 
-- Size (5–10) and **Level** (Easy / Medium / Hard, `#g-level`, `state.level`); changing either starts a new puzzle.
+- Preferences (⚙ pop-up `#g-prefs-modal`, same behaviour as Sort's: changes apply only on **New puzzle**,
+  Cancel / Escape / tapping outside revert): **Difficulty** (Easy / Medium / Hard, `state.level`) then **Grid size** (5–10).
 - `Groups.grade(n, regions)` solves like a person, using stronger steps only when stuck: (1) a row/column/group
   with one square left, (2) ✕ on a square whose O would wipe out a unit, (3) k groups confined to k rows/columns
   (any mix of unit kinds), (4) ✕ on a square whose O, after forced follow-ups, wipes out a unit. Returns

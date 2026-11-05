@@ -388,14 +388,40 @@
     return !inProgress() || confirm('Start a new puzzle? Your current progress will be lost.');
   }
 
-  document.getElementById('g-new').addEventListener('click', () => { if (confirmNew()) newGame(); });
-  sizeEl.addEventListener('change', () => {
-    if (confirmNew()) newGame();
-    else sizeEl.value = String(state.size);
+  document.getElementById('g-new').addEventListener('click', () => {
+    if (!confirmNew()) return;
+    showOptions();   // New keeps the current game's preferences
+    newGame();
   });
-  levelEl.addEventListener('change', () => {
-    if (confirmNew()) newGame();
-    else if (state.level) levelEl.value = state.level;
+  // ---------- Preferences pop-up ----------
+  // Menu changes only take effect when "New puzzle" is tapped; Cancel puts them back.
+
+  const prefsEl = document.getElementById('g-prefs-modal');
+  const prefsBtn = document.getElementById('g-prefs');
+
+  // Set the menus to the current game's size and level.
+  function showOptions() {
+    if (state.size) sizeEl.value = String(state.size);
+    if (state.level) levelEl.value = state.level;
+  }
+  function showPrefs(show) {
+    if (show) showOptions();
+    prefsEl.hidden = !show;
+    prefsBtn.setAttribute('aria-expanded', String(show));
+    if (show) levelEl.focus();
+    else prefsBtn.focus();
+  }
+  function cancelPrefs() {
+    showOptions();
+    showPrefs(false);
+  }
+  prefsBtn.addEventListener('click', () => showPrefs(true));
+  document.getElementById('g-prefs-cancel').addEventListener('click', cancelPrefs);
+  prefsEl.addEventListener('click', (e) => { if (e.target === prefsEl) cancelPrefs(); });
+  document.getElementById('g-prefs-apply').addEventListener('click', () => {
+    if (!confirmNew()) return;
+    showPrefs(false);
+    newGame();
   });
   document.getElementById('g-undo').addEventListener('click', undo);
   document.getElementById('g-clear').addEventListener('click', clearBoard);
@@ -412,6 +438,7 @@
 
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !rulesEl.hidden) return showRules(false);
+    if (e.key === 'Escape' && !prefsEl.hidden) return cancelPrefs();
     if (isActive() && (e.ctrlKey || e.metaKey) && e.key === 'z') undo();
   });
 
