@@ -1,7 +1,7 @@
 {
-  "name": "Sudoku",
-  "short_name": "Sudoku",
-  "description": "Sudoku and Groups logic puzzles with no ads.",
+  "name": "Multi Puzzle",
+  "short_name": "Multi Puzzle",
+  "description": "Multi Puzzle: Sudoku and Groups logic puzzles with no ads.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
