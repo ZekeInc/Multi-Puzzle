@@ -16,14 +16,24 @@
     },
     sort: {
       title: 'Sort',
-      // Many colour/extra-tube combinations exist, so only played ones are listed.
-      onlyPlayed: true,
-      // The default box (4 per box, 0 empty) is listed first and uses the short key `colours-extra`.
-      keys: [[4, 0], [3, 0], [3, 1], [4, 1], [4, 2], [5, 0], [5, 1], [5, 2], [6, 0], [6, 1], [6, 2]]
-        .flatMap(([cap, empty]) => [4, 5, 6, 7, 8, 9, 10].flatMap((c) => [1, 2, 3].map((e) =>
-          cap === 4 && !empty
-            ? [`${c}-${e}`, `${c} colours, ${e} extra`]
-            : [`${c}-${e}-${cap}-${empty}`, `${c} colours, ${e} extra, ${cap} per box, ${empty} empty`]))),
+      // Too many option combinations to list, so the played ones are read from
+      // the saved keys: `colours-extra[-cap-empty][-any][-level]`.
+      fromSaved: true,
+      label(key) {
+        const parts = key.split('-');
+        const [c, e] = parts;
+        let i = 2;
+        let text = `${c} colours, ${e} extra`;
+        if (/^\d+$/.test(parts[i] || '')) {
+          text += `, ${parts[i]} per box, ${parts[i + 1]} empty`;
+          i += 2;
+        }
+        if (parts[i] === 'any') { text += ', any colour'; i++; }
+        // No level means Random (also every game from before levels existed).
+        const level = parts[i] || 'random';
+        text += `, ${level[0].toUpperCase()}${level.slice(1)}`;
+        return text;
+      },
     },
   };
 
@@ -82,9 +92,16 @@
       const table = document.createElement('table');
       table.innerHTML = '<thead><tr><th scope="col"></th><th scope="col">Best time</th><th scope="col">Solved</th></tr></thead>';
       const tbody = document.createElement('tbody');
-      for (const [key, label] of cat.keys) {
+      const keys = cat.fromSaved
+        ? Object.keys(readAll())
+          .filter((id) => id.startsWith(`${game}:`))
+          .map((id) => id.slice(game.length + 1))
+          .sort((x, y) => x.localeCompare(y, undefined, { numeric: true }))
+          .map((key) => [key, cat.label(key)])
+        : cat.keys;
+      for (const [key, label] of keys) {
         const { best, solved } = get(game, key);
-        if (cat.onlyPlayed && !solved) continue;
+        if (cat.fromSaved && !solved) continue;
         const tr = document.createElement('tr');
         const cells = [label, best === null ? '—' : formatTime(best), String(solved)];
         cells.forEach((text, i) => {

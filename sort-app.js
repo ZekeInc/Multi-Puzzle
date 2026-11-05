@@ -12,7 +12,8 @@
   const extraEl = document.getElementById('s-extra');
   const capEl = document.getElementById('s-cap');
   const emptyEl = document.getElementById('s-empty');
-  const capTextEl = document.getElementById('s-cap-text');
+  const levelEl = document.getElementById('s-level');
+  const mixEl = document.getElementById('s-mix');
   const movesEl = document.getElementById('s-moves');
   const timerEl = document.getElementById('s-timer');
   const bestEl = document.getElementById('s-best');
@@ -23,8 +24,10 @@
   const state = {
     colors: 0,
     extra: 0,
-    cap: Sort.CAPACITY,   // squares per box
+    cap: Sort.CAPACITY,   // blocks per box
     empty: 0,             // free spaces each colour box starts with
+    mix: false,           // may blocks be dropped onto a different colour
+    level: 'random',      // 'random' (not graded) or one of Sort.LEVELS
     initial: [],
     tubes: [],
     history: [],
@@ -45,10 +48,15 @@
   function buzz(pattern) {
     if (navigator.vibrate) navigator.vibrate(pattern);
   }
-  // The default box (4 squares, starts full) keeps the original key, so old best times still count.
+  // Best-time key: `colours-extra`, then `-cap-empty` unless the default box
+  // (4 blocks, starts full), `-any` with the mix rule, and `-level` unless Random.
+  // A game from before these options keeps the original short key.
   const scoreKey = () => `${state.colors}-${state.extra}` +
-    (state.cap === Sort.CAPACITY && !state.empty ? '' : `-${state.cap}-${state.empty}`);
-  // A box is complete (and closes) when it holds every square of one colour.
+    (state.cap === Sort.CAPACITY && !state.empty ? '' : `-${state.cap}-${state.empty}`) +
+    (state.mix ? '-any' : '') +
+    (state.level === 'random' ? '' : `-${state.level}`);
+  const rules = () => ({ cap: state.cap, mix: state.mix });
+  // A box is complete (and closes) when it holds every block of one colour.
   const tubeDone = (t) => t.length === state.cap - state.empty && t.every((c) => c === t[0]);
 
   // ---------- Timer ----------
@@ -85,6 +93,7 @@
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify({
         colors: state.colors, extra: state.extra, cap: state.cap, empty: state.empty,
+        mix: state.mix, level: state.level,
         initial: state.initial, tubes: state.tubes,
         moves: state.moves, elapsed: elapsedMs(), finished: state.finished, hintsUsed: state.hintsUsed,
       }));
@@ -97,6 +106,7 @@
       if (!d || !Array.isArray(d.tubes)) return false;
       Object.assign(state, d, {
         cap: d.cap || Sort.CAPACITY, empty: d.empty || 0,
+        mix: !!d.mix, level: d.level || 'random',
         history: [], selected: -1, runStart: 0, hintsUsed: !!d.hintsUsed,
       });
       showOptions();
@@ -115,6 +125,8 @@
     extraEl.value = String(state.extra);
     capEl.value = String(state.cap);
     emptyEl.value = String(state.empty);
+    mixEl.value = state.mix ? 'any' : 'same';
+    levelEl.value = state.level;
     limitOptions();
   }
 
@@ -123,14 +135,29 @@
   function limitOptions() {
     let note = '';
     const cap = Number(capEl.value);
+    const mix = mixEl.value === 'any';
+    // No extra boxes only works when blocks can stack on any colour.
+    extraEl.options[0].disabled = !mix;
+    if (!mix && extraEl.value === '0') {
+      extraEl.value = '1';
+      note = '0 extra boxes needs “Stack on any colour”.';
+    }
+    // With no extra boxes, the empty spaces are the only room to move.
     const maxEmpty = Sort.maxEmpty(cap);
-    for (const opt of emptyEl.options) opt.disabled = Number(opt.value) > maxEmpty;
+    const minEmpty = extraEl.value === '0' ? Sort.minEmptyNoExtra(cap) : 0;
+    for (const opt of emptyEl.options) {
+      opt.disabled = Number(opt.value) > maxEmpty || Number(opt.value) < minEmpty;
+    }
     if (Number(emptyEl.value) > maxEmpty) {
       emptyEl.value = String(maxEmpty);
       note = `With ${cap} per box the most empty spaces is ${maxEmpty}.`;
+    } else if (Number(emptyEl.value) < minEmpty) {
+      emptyEl.value = String(minEmpty);
+      note = `With 0 extra and ${cap} per box, at least ${minEmpty} empty.`;
     }
-    // With only one extra box and no empty spaces, very large puzzles are rarely solvable.
-    const tight = extraEl.value === '1' && emptyEl.value === '0';
+    // With only one extra box, no empty spaces and same-colour stacking,
+    // very large puzzles are rarely solvable.
+    const tight = !mix && extraEl.value === '1' && emptyEl.value === '0';
     const maxColors = tight ? MAX_COLORS_TIGHT[cap] : 10;
     for (const opt of colorsEl.options) opt.disabled = Number(opt.value) > maxColors;
     if (Number(colorsEl.value) > maxColors) {
@@ -138,6 +165,14 @@
       note = `With 1 extra box, ${cap} per box and no empty spaces, the most colours is ${maxColors}.`;
     }
     return note;
+  }
+
+  // The How to play text describes the current game's box size and stacking rule.
+  function showRulesText() {
+    document.getElementById('s-cap-text').textContent = state.cap;
+    document.getElementById('s-stack-text').textContent = state.mix
+      ? 'onto any box with room: an empty box, the same number or a different number'
+      : 'onto an empty box or onto the same number';
   }
 
   // ---------- Rendering ----------
@@ -230,26 +265,27 @@
   function newGame() {
     const colors = Number(colorsEl.value), extra = Number(extraEl.value);
     const cap = Number(capEl.value), empty = Number(emptyEl.value);
+    const mix = mixEl.value === 'any', level = levelEl.value;
     gameId++;
     setMessage('Generating…');
     setTimeout(() => {
       let tubes, error;
       // A rare unlucky run can fail to find a solvable deal; try a few times.
       for (let tries = 0; tries < 3 && !tubes; tries++) {
-        try { tubes = Sort.generate(colors, extra, cap, empty); } catch (err) { error = err; }
+        try { tubes = Sort.generate(colors, extra, { cap, empty, mix, level }); } catch (err) { error = err; }
       }
       if (!tubes) {
         setMessage(`Couldn't create a puzzle (${error.message}). Tap New to try again.`, 'bad');
         return;
       }
       Object.assign(state, {
-        colors, extra, cap, empty, initial: tubes.map((t) => t.slice()), tubes,
+        colors, extra, cap, empty, mix, level, initial: tubes.map((t) => t.slice()), tubes,
         history: [], selected: -1, moves: 0, elapsed: 0, runStart: 0,
         finished: false, hintsUsed: false,
       });
       if (isActive()) startTimer();
       setMessage('');
-      capTextEl.textContent = cap;
+      showRulesText();
       render();
       save();
     }, 20);
@@ -272,17 +308,17 @@
   }
 
   function move(from, to) {
-    const n = Sort.moveCount(state.tubes, from, to, state.cap);
+    const n = Sort.moveCount(state.tubes, from, to, rules());
     if (!n) return false;
     state.history.push({ tubes: state.tubes, moves: state.moves });
     if (state.history.length > 500) state.history.shift();
-    state.tubes = Sort.applyMove(state.tubes, from, to, state.cap);
+    state.tubes = Sort.applyMove(state.tubes, from, to, rules());
     state.moves++;
     state.selected = -1;
     setMessage('');
     render({ [to]: n });
     if (Sort.isSolved(state.tubes)) return finish() || true;
-    if (!Sort.moves(state.tubes, state.cap).length) setMessage('No moves left. Tap Undo or Restart.', 'bad');
+    if (!Sort.moves(state.tubes, rules()).length) setMessage('No moves left. Tap Undo or Restart.', 'bad');
     save();
     return true;
   }
@@ -326,7 +362,7 @@
 
   function hint() {
     if (state.finished) return;
-    const result = Sort.solve(state.tubes, 150000, state.cap);
+    const result = Sort.solve(state.tubes, 50000, rules());
     if (!result.moves) {
       setMessage(result.unsolvable
         ? "This position can't be solved. Undo some moves or restart."
@@ -419,7 +455,7 @@
     showOptions();
     showPrefs(false);
   }
-  for (const el of [colorsEl, extraEl, capEl, emptyEl]) {
+  for (const el of [levelEl, colorsEl, extraEl, capEl, emptyEl, mixEl]) {
     el.addEventListener('change', () => { prefsNoteEl.textContent = limitOptions(); });
   }
   prefsBtn.addEventListener('click', () => showPrefs(true));
@@ -458,7 +494,7 @@
   // ---------- Start ----------
 
   if (load()) {
-    capTextEl.textContent = state.cap;
+    showRulesText();
     render();
     if (state.finished) {
       state.tubes = tidyMoves(state.tubes).tubes;
