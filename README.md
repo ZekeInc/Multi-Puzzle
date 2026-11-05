@@ -1,5 +1,7 @@
-# Sudoku-app
-Sudoku app with no ads.
+# Multi Puzzle
+Logic puzzles with no ads.
+
+**▶ [Play now](https://zekeinc.github.io/Multi-Puzzle/)** — https://zekeinc.github.io/Multi-Puzzle/
 
 Simple, dependency-free logic puzzles in plain HTML, CSS and JavaScript, with two modes: **Sudoku** and **Groups**. Switch between them with the tabs at the top.
 
@@ -7,7 +9,8 @@ Built for phones: it can be installed to your home screen, runs full-screen,
 works offline, and remembers your game when you switch apps.
 
 ## Play
-Open `index.html` in any browser — no build step needed.
+Play online at **https://zekeinc.github.io/Multi-Puzzle/** (updates a minute or two after each merge to `main`),
+or open `index.html` in any browser — no build step needed.
 
 ## Install on your phone
 The app must be served over HTTPS to be installable (e.g. GitHub Pages:

@@ -1,6 +1,6 @@
 // Service worker: caches the app so it works offline once installed.
 // Bump CACHE when files change so phones pick up the new version.
-const CACHE = 'sudoku-v4';
+const CACHE = 'multi-puzzle-v5';
 const FILES = [
   './',
   'index.html',
