@@ -22,7 +22,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="style.css?v=18">
+  <link rel="stylesheet" href="style.css?v=19">
 </head>
 <body>
   <main>
@@ -109,6 +109,11 @@
           <option value="8">8 × 8</option>
           <option value="9">9 × 9</option>
           <option value="10">10 × 10</option>
+        </select>
+        <select id="g-level" aria-label="Difficulty">
+          <option value="easy">Easy</option>
+          <option value="medium" selected>Medium</option>
+          <option value="hard">Hard</option>
         </select>
         <button id="g-new">New</button>
         <button id="g-rules" aria-expanded="false" aria-controls="g-rules-text">Rules</button>
@@ -283,11 +288,11 @@
 
   <script src="theme.js?v=7"></script>
   <script src="modes.js?v=10"></script>
-  <script src="scores.js?v=8"></script>
+  <script src="scores.js?v=9"></script>
   <script src="sudoku.js?v=4"></script>
   <script src="app.js?v=4"></script>
-  <script src="groups.js?v=4"></script>
-  <script src="groups-app.js?v=4"></script>
+  <script src="groups.js?v=5"></script>
+  <script src="groups-app.js?v=5"></script>
   <script src="sort.js?v=10"></script>
   <script src="sort-app.js?v=18"></script>
   <script>

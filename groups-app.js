@@ -8,6 +8,7 @@
 
   const boardEl = document.getElementById('g-board');
   const sizeEl = document.getElementById('g-size');
+  const levelEl = document.getElementById('g-level');
   const timerEl = document.getElementById('g-timer');
   const bestEl = document.getElementById('g-best');
   const messageEl = document.getElementById('g-message');
@@ -16,6 +17,7 @@
 
   const state = {
     size: 0,
+    level: null,    // 'easy' | 'medium' | 'hard'; null for games from before levels
     regions: [],
     solution: [],   // solution[row] = column
     colors: [],     // colors[group] = palette index
@@ -90,6 +92,7 @@
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify({
         size: state.size,
+        level: state.level,
         regions: state.regions,
         solution: state.solution,
         colors: state.colors,
@@ -106,11 +109,12 @@
       const d = JSON.parse(localStorage.getItem(SAVE_KEY));
       if (!d || d.regions.length !== d.size * d.size) return false;
       Object.assign(state, {
-        size: d.size, regions: d.regions, solution: d.solution, colors: d.colors,
+        size: d.size, level: d.level || null, regions: d.regions, solution: d.solution, colors: d.colors,
         marks: d.marks, elapsed: d.elapsed, finished: d.finished, hintsUsed: !!d.hintsUsed,
         history: [], runStart: 0,
       });
       sizeEl.value = String(d.size);
+      if (d.level) levelEl.value = d.level;
       return true;
     } catch (e) {
       return false;
@@ -174,8 +178,14 @@
     renderBest();
   }
 
+  // Best-time key: size and level, e.g. "7-hard" (just the size for games from before levels).
+  function scoreKey() {
+    if (!state.size) return `${sizeEl.value}-${levelEl.value}`;
+    return state.level ? `${state.size}-${state.level}` : String(state.size);
+  }
+
   function renderBest() {
-    bestEl.textContent = Scores.bestLabel('groups', String(state.size || sizeEl.value));
+    bestEl.textContent = Scores.bestLabel('groups', scoreKey());
   }
   window.addEventListener('scoreschange', renderBest);
 
@@ -183,11 +193,12 @@
 
   function newGame() {
     const n = Number(sizeEl.value);
+    const level = levelEl.value;
     setMessage('Generating…');
     setTimeout(() => {
       let p;
       try {
-        p = Groups.generate(n);
+        p = Groups.generate(n, level);
       } catch (err) {
         setMessage(`Couldn't create a puzzle (${err.message}). Tap New to try again.`, 'bad');
         return;
@@ -195,6 +206,7 @@
       const palette = shuffle([...Array(COLOR_COUNT).keys()]);
       Object.assign(state, {
         size: n,
+        level,
         regions: p.regions,
         solution: p.solution,
         colors: palette.slice(0, n),
@@ -237,7 +249,7 @@
     render();
     buzz([60, 60, 60]);
     const time = formatTime(state.elapsed);
-    const result = Scores.record('groups', String(state.size), state.elapsed, !state.hintsUsed);
+    const result = Scores.record('groups', scoreKey(), state.elapsed, !state.hintsUsed);
     if (result.isNew && result.previous !== null) {
       setMessage(`Solved in ${time}! 🏆 New best (was ${formatTime(result.previous)})`, 'win');
     } else if (result.isNew) {
@@ -380,6 +392,10 @@
   sizeEl.addEventListener('change', () => {
     if (confirmNew()) newGame();
     else sizeEl.value = String(state.size);
+  });
+  levelEl.addEventListener('change', () => {
+    if (confirmNew()) newGame();
+    else if (state.level) levelEl.value = state.level;
   });
   document.getElementById('g-undo').addEventListener('click', undo);
   document.getElementById('g-clear').addEventListener('click', clearBoard);
