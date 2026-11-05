@@ -20,7 +20,7 @@
   /* Sort mode colours: muted, natural tones (mid-tones, so they read on light and dark) */
   --s0: #c0694e; /* 1 terracotta */  --s1: #d6a54f; /* 2 ochre */  --s2: #8daa78; /* 3 sage */
   --s3: #5f84ad; /* 4 slate blue */  --s4: #c98a9b; /* 5 dusty rose */  --s5: #8a8a4a; /* 6 olive */
-  --s6: #8b6a52; /* 7 walnut */  --s7: #9b8dc0; /* 8 lavender */  --s8: #4f9590; /* 9 teal */
+  --s6: #b08a6e; /* 7 light walnut */  --s7: #9b8dc0; /* 8 lavender */  --s8: #4f9590; /* 9 teal */
   --s9: #9aa0a6; /* 10 stone */
 
   /* Groups mode colours */
@@ -549,7 +549,6 @@ button:active { transform: scale(0.96); }
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
-.square.ink-light { color: #ffffff; }
 .square.arrived { animation: drop 0.2s ease-out; }
 .s-board.solved .tube.done { animation: pop 0.4s ease-out; }
 

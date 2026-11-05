@@ -2,7 +2,6 @@
   'use strict';
 
   const SAVE_KEY = 'sort-save-v1';
-  const LIGHT_INK = new Set([6]);   // colours dark enough to need a white number
   // With 1 extra box and no empty spaces, bigger boxes leave less room to move,
   // so large deals are rarely solvable. Most colours allowed for each box size:
   const MAX_COLORS_TIGHT = { 3: 10, 4: 9, 5: 7, 6: 6 };
@@ -192,7 +191,6 @@
         sq.className = 'square';
         sq.style.setProperty('--c', `var(--s${c})`);
         sq.textContent = c + 1;
-        if (LIGHT_INK.has(c)) sq.classList.add('ink-light');
         if (k >= tube.length - (arrived[t] || 0)) sq.classList.add('arrived');
         if (k >= tube.length - lifted) sq.classList.add('lifted');
         btn.appendChild(sq);
