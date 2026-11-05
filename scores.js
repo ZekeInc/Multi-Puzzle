@@ -18,8 +18,12 @@
       title: 'Sort',
       // Many colour/extra-tube combinations exist, so only played ones are listed.
       onlyPlayed: true,
-      keys: [].concat(...[4, 5, 6, 7, 8, 9, 10].map((c) =>
-        [1, 2, 3].map((e) => [`${c}-${e}`, `${c} colours, ${e} extra`]))),
+      // The default box (4 per box, 0 empty) is listed first and uses the short key `colours-extra`.
+      keys: [[4, 0], [3, 0], [3, 1], [4, 1], [4, 2], [5, 0], [5, 1], [5, 2], [6, 0], [6, 1], [6, 2]]
+        .flatMap(([cap, empty]) => [4, 5, 6, 7, 8, 9, 10].flatMap((c) => [1, 2, 3].map((e) =>
+          cap === 4 && !empty
+            ? [`${c}-${e}`, `${c} colours, ${e} extra`]
+            : [`${c}-${e}-${cap}-${empty}`, `${c} colours, ${e} extra, ${cap} per box, ${empty} empty`]))),
     },
   };
 

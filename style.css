@@ -464,7 +464,27 @@ button:active { transform: scale(0.96); }
 
 /* ===================== Sort mode ===================== */
 
-.sort-controls { grid-template-columns: 1.2fr 1fr 1fr; }
+.sort-controls { grid-template-columns: 2fr 1fr; }
+
+/* Preferences pop-up: two labelled groups, each with two menus side by side. */
+.prefs .opt-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 8px;
+  margin-top: 14px;
+}
+.opt-group select { min-height: 44px; padding: 0 8px; font-size: 0.95rem; min-width: 0; }
+.opt-label {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding-left: 2px;
+}
+.prefs .note { min-height: 1.45em; margin: 10px 0 0; font-size: 0.85rem; color: var(--muted); }
+.rules .modal-buttons button.neutral { color: var(--text); }
 
 #sort-view .board-wrap {
   flex: 1 1 0;     /* take the leftover height; tubes are sized to fit it */
@@ -489,8 +509,8 @@ button:active { transform: scale(0.96); }
   gap: 3px;
   padding: 4px;
   width: calc(var(--sq) + 12px);
-  /* Exactly 4 squares + gaps + padding, so a full tube can close neatly. */
-  height: calc(var(--sq) * 4 + 9px + 12px);
+  /* Exactly `--cap` squares + gaps + padding, so a full tube can close neatly. */
+  height: calc(var(--sq) * var(--cap, 4) + (var(--cap, 4) - 1) * 3px + 12px);
   /* Open-top rectangle with sharp corners. */
   border: 2px solid var(--line-strong);
   border-top-color: transparent;
@@ -508,7 +528,7 @@ button:active { transform: scale(0.96); }
     0 0 0 2px var(--halo),
     0 0 10px 3px color-mix(in srgb, var(--halo) 65%, transparent);
 }
-/* A completed tube (full, one colour) closes its top. */
+/* A completed tube (all of one colour) closes its top. */
 .tube.done { border-top-color: var(--line-strong); }
 .tube.done.hint-from, .tube.done.hint-to { border-top-color: var(--accent); }
 .tube.hint-from, .tube.hint-to { border-color: var(--accent); border-top-color: transparent; border-style: dashed; }

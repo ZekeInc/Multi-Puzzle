@@ -2,14 +2,18 @@
   'use strict';
 
   const SAVE_KEY = 'sort-save-v1';
-  const CAP = Sort.CAPACITY;
   const LIGHT_INK = new Set([6]);   // colours dark enough to need a white number
-  const MAX_COLORS_WITH_ONE_EXTRA = 9;
+  // With 1 extra box and no empty spaces, bigger boxes leave less room to move,
+  // so large deals are rarely solvable. Most colours allowed for each box size:
+  const MAX_COLORS_TIGHT = { 3: 10, 4: 9, 5: 7, 6: 6 };
   const isActive = () => GameMode.isActive('sort');
 
   const boardEl = document.getElementById('s-board');
   const colorsEl = document.getElementById('s-colors');
   const extraEl = document.getElementById('s-extra');
+  const capEl = document.getElementById('s-cap');
+  const emptyEl = document.getElementById('s-empty');
+  const capTextEl = document.getElementById('s-cap-text');
   const movesEl = document.getElementById('s-moves');
   const timerEl = document.getElementById('s-timer');
   const bestEl = document.getElementById('s-best');
@@ -20,6 +24,8 @@
   const state = {
     colors: 0,
     extra: 0,
+    cap: Sort.CAPACITY,   // squares per box
+    empty: 0,             // free spaces each colour box starts with
     initial: [],
     tubes: [],
     history: [],
@@ -40,8 +46,11 @@
   function buzz(pattern) {
     if (navigator.vibrate) navigator.vibrate(pattern);
   }
-  const scoreKey = () => `${state.colors}-${state.extra}`;
-  const tubeDone = (t) => t.length === CAP && t.every((c) => c === t[0]);
+  // The default box (4 squares, starts full) keeps the original key, so old best times still count.
+  const scoreKey = () => `${state.colors}-${state.extra}` +
+    (state.cap === Sort.CAPACITY && !state.empty ? '' : `-${state.cap}-${state.empty}`);
+  // A box is complete (and closes) when it holds every square of one colour.
+  const tubeDone = (t) => t.length === state.cap - state.empty && t.every((c) => c === t[0]);
 
   // ---------- Timer ----------
 
@@ -76,7 +85,8 @@
     if (!state.colors) return;
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify({
-        colors: state.colors, extra: state.extra, initial: state.initial, tubes: state.tubes,
+        colors: state.colors, extra: state.extra, cap: state.cap, empty: state.empty,
+        initial: state.initial, tubes: state.tubes,
         moves: state.moves, elapsed: elapsedMs(), finished: state.finished, hintsUsed: state.hintsUsed,
       }));
     } catch (e) { /* storage unavailable */ }
@@ -86,10 +96,11 @@
     try {
       const d = JSON.parse(localStorage.getItem(SAVE_KEY));
       if (!d || !Array.isArray(d.tubes)) return false;
-      Object.assign(state, d, { history: [], selected: -1, runStart: 0, hintsUsed: !!d.hintsUsed });
-      colorsEl.value = String(d.colors);
-      extraEl.value = String(d.extra);
-      limitColorOptions();
+      Object.assign(state, d, {
+        cap: d.cap || Sort.CAPACITY, empty: d.empty || 0,
+        history: [], selected: -1, runStart: 0, hintsUsed: !!d.hintsUsed,
+      });
+      showOptions();
       return true;
     } catch (e) {
       return false;
@@ -98,17 +109,36 @@
 
   // ---------- Options ----------
 
-  // With only one extra tube, very large puzzles are rarely solvable.
-  function limitColorOptions() {
-    const oneExtra = extraEl.value === '1';
-    for (const opt of colorsEl.options) {
-      opt.disabled = oneExtra && Number(opt.value) > MAX_COLORS_WITH_ONE_EXTRA;
+  // Set the menus to the current game's options.
+  function showOptions() {
+    if (!state.colors) return;   // no game yet: keep the menus' defaults
+    colorsEl.value = String(state.colors);
+    extraEl.value = String(state.extra);
+    capEl.value = String(state.cap);
+    emptyEl.value = String(state.empty);
+    limitOptions();
+  }
+
+  // Keep the menus to combinations that can be dealt. Returns a message if a
+  // choice had to be changed, or ''.
+  function limitOptions() {
+    let note = '';
+    const cap = Number(capEl.value);
+    const maxEmpty = Sort.maxEmpty(cap);
+    for (const opt of emptyEl.options) opt.disabled = Number(opt.value) > maxEmpty;
+    if (Number(emptyEl.value) > maxEmpty) {
+      emptyEl.value = String(maxEmpty);
+      note = `With ${cap} per box the most empty spaces is ${maxEmpty}.`;
     }
-    if (oneExtra && Number(colorsEl.value) > MAX_COLORS_WITH_ONE_EXTRA) {
-      colorsEl.value = String(MAX_COLORS_WITH_ONE_EXTRA);
-      return true;
+    // With only one extra box and no empty spaces, very large puzzles are rarely solvable.
+    const tight = extraEl.value === '1' && emptyEl.value === '0';
+    const maxColors = tight ? MAX_COLORS_TIGHT[cap] : 10;
+    for (const opt of colorsEl.options) opt.disabled = Number(opt.value) > maxColors;
+    if (Number(colorsEl.value) > maxColors) {
+      colorsEl.value = String(maxColors);
+      note = `With 1 extra box, ${cap} per box and no empty spaces, the most colours is ${maxColors}.`;
     }
-    return false;
+    return note;
   }
 
   // ---------- Rendering ----------
@@ -128,13 +158,15 @@
     for (let rows = 1; rows <= 3; rows++) {
       const perRow = Math.ceil(total / rows);
       const byWidth = (W - (perRow - 1) * COL_GAP) / perRow - TUBE_PAD;
-      // Tube height = 4 squares + gaps + padding.
-      const fixed = (CAP - 1) * SQ_GAP + TUBE_PAD;
-      const byHeight = (H - LIFT - (rows - 1) * ROW_GAP - rows * fixed) / (rows * CAP);
+      // Tube height = `cap` squares + gaps + padding.
+      const cap = state.cap;
+      const fixed = (cap - 1) * SQ_GAP + TUBE_PAD;
+      const byHeight = (H - LIFT - (rows - 1) * ROW_GAP - rows * fixed) / (rows * cap);
       const size = Math.min(byWidth, byHeight, 56);
       if (size > best.size + 0.5) best = { size, perRow };
     }
     boardEl.style.setProperty('--per-row', best.perRow);
+    boardEl.style.setProperty('--cap', state.cap);
     boardEl.style.setProperty('--sq', `${Math.max(Math.floor(best.size), 14)}px`);
   }
   if (window.ResizeObserver) new ResizeObserver(layout).observe(wrapEl);
@@ -178,7 +210,7 @@
   window.addEventListener('scoreschange', renderBest);
 
   // Once no tube mixes colours, gather any colour that is split across
-  // several tubes into one full tube. Returns the moves needed.
+  // several tubes into one tube. Returns the moves needed.
   function tidyMoves(tubes) {
     const steps = [];
     const sim = tubes.map((t) => t.slice());
@@ -199,23 +231,27 @@
 
   function newGame() {
     const colors = Number(colorsEl.value), extra = Number(extraEl.value);
+    const cap = Number(capEl.value), empty = Number(emptyEl.value);
     gameId++;
     setMessage('Generating…');
     setTimeout(() => {
-      let tubes;
-      try {
-        tubes = Sort.generate(colors, extra);
-      } catch (err) {
-        setMessage(`Couldn't create a puzzle (${err.message}). Tap New to try again.`, 'bad');
+      let tubes, error;
+      // A rare unlucky run can fail to find a solvable deal; try a few times.
+      for (let tries = 0; tries < 3 && !tubes; tries++) {
+        try { tubes = Sort.generate(colors, extra, cap, empty); } catch (err) { error = err; }
+      }
+      if (!tubes) {
+        setMessage(`Couldn't create a puzzle (${error.message}). Tap New to try again.`, 'bad');
         return;
       }
       Object.assign(state, {
-        colors, extra, initial: tubes.map((t) => t.slice()), tubes,
+        colors, extra, cap, empty, initial: tubes.map((t) => t.slice()), tubes,
         history: [], selected: -1, moves: 0, elapsed: 0, runStart: 0,
         finished: false, hintsUsed: false,
       });
       if (isActive()) startTimer();
       setMessage('');
+      capTextEl.textContent = cap;
       render();
       save();
     }, 20);
@@ -238,17 +274,17 @@
   }
 
   function move(from, to) {
-    const n = Sort.moveCount(state.tubes, from, to);
+    const n = Sort.moveCount(state.tubes, from, to, state.cap);
     if (!n) return false;
     state.history.push({ tubes: state.tubes, moves: state.moves });
     if (state.history.length > 500) state.history.shift();
-    state.tubes = Sort.applyMove(state.tubes, from, to);
+    state.tubes = Sort.applyMove(state.tubes, from, to, state.cap);
     state.moves++;
     state.selected = -1;
     setMessage('');
     render({ [to]: n });
     if (Sort.isSolved(state.tubes)) return finish() || true;
-    if (!Sort.moves(state.tubes).length) setMessage('No moves left. Tap Undo or Restart.', 'bad');
+    if (!Sort.moves(state.tubes, state.cap).length) setMessage('No moves left. Tap Undo or Restart.', 'bad');
     save();
     return true;
   }
@@ -292,7 +328,7 @@
 
   function hint() {
     if (state.finished) return;
-    const result = Sort.solve(state.tubes, 150000);
+    const result = Sort.solve(state.tubes, 150000, state.cap);
     if (!result.moves) {
       setMessage(result.unsolvable
         ? "This position can't be solved. Undo some moves or restart."
@@ -367,22 +403,41 @@
   function confirmNew() {
     return !inProgress() || confirm('Start a new puzzle? Your current progress will be lost.');
   }
-  function optionChanged() {
-    const adjusted = limitColorOptions();
-    if (confirmNew()) {
-      boardEl.classList.remove('solved');
-      newGame();
-      if (adjusted) setTimeout(() => setMessage('With 1 extra box the most colours is 9.'), 40);
-    } else {
-      colorsEl.value = String(state.colors);
-      extraEl.value = String(state.extra);
-      limitColorOptions();
-    }
+  // ---------- Preferences pop-up ----------
+  // Menu changes only take effect when "New puzzle" is tapped; Cancel puts them back.
+
+  const prefsEl = document.getElementById('s-prefs-modal');
+  const prefsBtn = document.getElementById('s-prefs');
+  const prefsNoteEl = document.getElementById('s-prefs-note');
+
+  function showPrefs(show) {
+    if (show) { showOptions(); prefsNoteEl.textContent = ''; }
+    prefsEl.hidden = !show;
+    prefsBtn.setAttribute('aria-expanded', String(show));
+    if (show) extraEl.focus();
+    else prefsBtn.focus();
   }
-  colorsEl.addEventListener('change', optionChanged);
-  extraEl.addEventListener('change', optionChanged);
+  function cancelPrefs() {
+    showOptions();
+    showPrefs(false);
+  }
+  for (const el of [colorsEl, extraEl, capEl, emptyEl]) {
+    el.addEventListener('change', () => { prefsNoteEl.textContent = limitOptions(); });
+  }
+  prefsBtn.addEventListener('click', () => showPrefs(true));
+  document.getElementById('s-prefs-cancel').addEventListener('click', cancelPrefs);
+  prefsEl.addEventListener('click', (e) => { if (e.target === prefsEl) cancelPrefs(); });
+  document.getElementById('s-prefs-apply').addEventListener('click', () => {
+    if (!confirmNew()) return;
+    showPrefs(false);
+    boardEl.classList.remove('solved');
+    newGame();
+  });
   document.getElementById('s-new').addEventListener('click', () => {
-    if (confirmNew()) { boardEl.classList.remove('solved'); newGame(); }
+    if (!confirmNew()) return;
+    showOptions();   // New keeps the current game's preferences
+    boardEl.classList.remove('solved');
+    newGame();
   });
   document.getElementById('s-undo').addEventListener('click', undo);
   document.getElementById('s-restart').addEventListener('click', restart);
@@ -398,12 +453,14 @@
   rulesEl.addEventListener('click', (e) => { if (e.target === rulesEl) showRules(false); });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !rulesEl.hidden) return showRules(false);
+    if (e.key === 'Escape' && !prefsEl.hidden) return cancelPrefs();
     if (isActive() && (e.ctrlKey || e.metaKey) && e.key === 'z') undo();
   });
 
   // ---------- Start ----------
 
   if (load()) {
+    capTextEl.textContent = state.cap;
     render();
     if (state.finished) {
       state.tubes = tidyMoves(state.tubes).tubes;
