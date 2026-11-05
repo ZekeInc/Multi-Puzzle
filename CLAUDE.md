@@ -54,7 +54,8 @@ with `require()` for testing.
 - `Groups.generate(n, level)` deals up to 12 puzzles (1 s budget, at least 3), ranks them by score and takes the
   easiest (Easy), middle (Medium) or hardest (Hard).
 - Colour boxes (`#g-groups`, `.g-chip`) above the board, one per group in board reading order: an O once the
-  group has one, red with two or more. In landscape they sit in the left column under the status.
+  group has one, red when any of its Os breaks a rule
+  (same conflicts the board marks). In landscape they sit in the left column under the status.
 - Best-time keys: `size-level` (e.g. `7-hard`); plain `size` keys are games from before levels and show as Random.
 
 ## Sort game notes

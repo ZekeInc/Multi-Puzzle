@@ -189,14 +189,21 @@
         `Row ${rowOf(i) + 1}, column ${colOf(i) + 1}${m === CIRCLE ? ', O' : m === CROSS ? ', crossed out' : ''}`);
     });
     boardEl.classList.toggle('solved', state.finished);
-    // Colour boxes: O when the group has an O; red when it has more than one.
+    // Colour boxes: O when the group has an O; red when any of its Os breaks a
+    // rule (two in the group, or sharing a row or column with, or touching, another O).
     const os = new Array(state.size).fill(0);
-    state.marks.forEach((m, i) => { if (m === CIRCLE) os[state.regions[i]]++; });
+    const wrong = new Array(state.size).fill(false);
+    state.marks.forEach((m, i) => {
+      if (m !== CIRCLE) return;
+      os[state.regions[i]]++;
+      if (bad.has(i)) wrong[state.regions[i]] = true;
+    });
     chips.forEach((chip, g) => {
       chip.classList.toggle('done', os[g] > 0);
-      chip.classList.toggle('conflict', os[g] > 1);
+      chip.classList.toggle('conflict', wrong[g]);
       chip.setAttribute('aria-label', `Group ${chips.indexOf(chip) + 1}: ` +
-        (os[g] > 1 ? `${os[g]} Os` : os[g] ? 'has its O' : 'no O yet'));
+        (os[g] > 1 ? `${os[g]} Os` : os[g] ? 'has its O' : 'no O yet') +
+        (wrong[g] ? ', breaks a rule' : ''));
     });
     groupsEl.classList.toggle('solved', state.finished);
     timerEl.textContent = formatTime(elapsedMs());
