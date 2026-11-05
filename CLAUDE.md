@@ -37,6 +37,8 @@ with `require()` for testing.
 - **Layout:** must fit phones down to 320px wide with no scrolling, and landscape phones
   (two-column layout under `@media (orientation: landscape) and (max-height: 600px)`).
   Respect `prefers-reduced-motion` for animations.
+  `main` is exactly the visible height: `--app-h`, set from `visualViewport` in `modes.js`
+  (`100dvh` disagrees with what iOS Safari really shows). Size boards from `--app-h`, not `100dvh`.
 - **Confirm before losing progress:** New, Restart, Clear and Solve ask first when a game is in progress.
 
 ## Sort game notes

@@ -74,8 +74,10 @@ body {
 
 main {
   max-width: 520px;
-  min-height: 100%;
-  min-height: 100dvh;
+  /* Exactly the visible height (set by modes.js), so content sized to fit never scrolls. */
+  height: 100%;
+  height: 100dvh;
+  height: var(--app-h, 100dvh);
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -203,7 +205,7 @@ button:active { transform: scale(0.96); }
   grid-template-columns: repeat(9, 1fr);
   grid-template-rows: repeat(9, 1fr);
   width: min(100%, calc(100vh - 380px));
-  width: min(100%, calc(100dvh - 380px - env(safe-area-inset-top) - env(safe-area-inset-bottom)));
+  width: min(100%, calc(var(--app-h, 100dvh) - 380px - env(safe-area-inset-top) - env(safe-area-inset-bottom)));
   min-width: 260px;
   aspect-ratio: 1;
   border: 2px solid var(--line-strong);
@@ -302,8 +304,8 @@ button:active { transform: scale(0.96); }
   main, .view { gap: 6px; }
   .actions button { min-height: 44px; flex-direction: row; justify-content: center; }
   .numpad button { min-height: 46px; }
-  #board { width: min(100%, calc(100dvh - 300px)); }
-  .g-board { width: min(100%, calc(100dvh - 250px)); }
+  #board { width: min(100%, calc(var(--app-h, 100dvh) - 300px)); }
+  .g-board { width: min(100%, calc(var(--app-h, 100dvh) - 250px)); }
 }
 
 /* Landscape phones: board on the left, controls on the right. */
@@ -322,10 +324,12 @@ button:active { transform: scale(0.96); }
   .board-wrap { grid-row: 1 / -1; grid-column: 1; }
   header, .top-controls, .message, .actions, .numpad { grid-column: 2; }
   .message { align-self: center; }
-  #sort-view .board-wrap { width: 58vw; min-height: 0; }
+  /* Sort: the controls take the width they need; the boxes get the rest. */
+  #sort-view.view { grid-template-columns: minmax(0, 1fr) auto; }
+  #sort-view .board-wrap { width: auto; min-width: 0; min-height: 0; }
   #board, .g-board {
     min-width: 0;
-    width: calc(100dvh - 70px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+    width: calc(var(--app-h, 100dvh) - 70px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
   }
   .top-controls > * { min-height: 40px; }
   .actions button { min-height: 40px; }
@@ -374,7 +378,7 @@ button:active { transform: scale(0.96); }
   grid-template-columns: repeat(var(--n), 1fr);
   grid-template-rows: repeat(var(--n), 1fr);
   width: min(100%, calc(100vh - 330px));
-  width: min(100%, calc(100dvh - 330px - env(safe-area-inset-top) - env(safe-area-inset-bottom)));
+  width: min(100%, calc(var(--app-h, 100dvh) - 330px - env(safe-area-inset-top) - env(safe-area-inset-bottom)));
   min-width: 260px;
   aspect-ratio: 1;
   border: 3px solid var(--g-edge);
@@ -464,7 +468,7 @@ button:active { transform: scale(0.96); }
 
 #sort-view .board-wrap {
   flex: 1 1 0;     /* take the leftover height; tubes are sized to fit it */
-  min-height: 160px;
+  min-height: 0;
 }
 
 .s-board {
