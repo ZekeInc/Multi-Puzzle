@@ -33,7 +33,8 @@ Every puzzle is randomly generated and has exactly one solution.
 Tubes hold stacks of coloured squares: one tube per colour, plus 1–3 empty extra tubes.
 Tap a tube to pick up its top square (and any matching squares under it), then tap another
 tube to drop them. You can only drop onto an empty tube or the same colour, and each tube
-holds 4 squares. The puzzle is solved when no tube holds more than one colour.
+holds 4 squares. The puzzle is solved when no tube holds more than one colour; any colour
+left split across tubes is then gathered into one full tube automatically.
 
 - 4–10 colours and 1–3 extra tubes (up to 9 colours with 1 extra tube)
 - Every puzzle is checked by a solver to make sure it can be won
@@ -54,7 +55,7 @@ your device and can be reset from the same screen.
 - Progress saved automatically on the device
 - Portrait and landscape layouts, with support for notched screens
 - Keyboard support: arrows to move, `1`–`9` to enter, `Backspace`/`Delete`/`0` to erase, `N` to toggle notes
-- Light and dark themes (follows your system setting)
+- Dark theme by default, with a sun/moon button to switch to light (remembered on the device)
 
 ## Files
 - `sudoku.js` — Sudoku solver, puzzle generator and conflict checking

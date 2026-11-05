@@ -181,10 +181,29 @@
   }
   window.addEventListener('scoreschange', renderBest);
 
+  // Once no tube mixes colours, gather any colour that is split across
+  // several tubes into one full tube. Returns the moves needed.
+  function tidyMoves(tubes) {
+    const steps = [];
+    const sim = tubes.map((t) => t.slice());
+    for (let c = 0; c < state.colors; c++) {
+      const holders = sim.map((t, i) => i).filter((i) => sim[i].length && sim[i][0] === c);
+      if (holders.length < 2) continue;
+      holders.sort((a, b) => sim[b].length - sim[a].length || a - b);
+      const target = holders[0];
+      for (const from of holders.slice(1)) {
+        steps.push([from, target]);
+        sim[target].push(...sim[from].splice(0));
+      }
+    }
+    return { steps, tubes: sim };
+  }
+
   // ---------- Game flow ----------
 
   function newGame() {
     const colors = Number(colorsEl.value), extra = Number(extraEl.value);
+    gameId++;
     setMessage('Generating…');
     setTimeout(() => {
       let tubes;
@@ -232,8 +251,8 @@
     state.selected = -1;
     setMessage('');
     render(to, n);
-    if (Sort.isSolved(state.tubes)) finish();
-    else if (!Sort.moves(state.tubes).length) setMessage('No moves left. Tap Undo or Restart.', 'bad');
+    if (Sort.isSolved(state.tubes)) return finish() || true;
+    if (!Sort.moves(state.tubes).length) setMessage('No moves left. Tap Undo or Restart.', 'bad');
     save();
     return true;
   }
@@ -298,10 +317,42 @@
   function finish() {
     pauseTimer();
     state.finished = true;
+    state.selected = -1;
+    // Save the tidied board straight away; the animation below is just for show.
+    const { steps, tubes: tidied } = tidyMoves(state.tubes);
+    const shown = state.tubes;
+    state.tubes = tidied;
+    save();
+    state.tubes = shown;
+    const result = Scores.record('sort', scoreKey(), state.elapsed, !state.hintsUsed);
+    animateTidy(steps, tidied, result);
+  }
+
+  let gameId = 0;   // bumped by newGame so a running tidy animation stops
+
+  function animateTidy(steps, tidied, result) {
+    const id = gameId;
+    if (!steps.length) return celebrate(result);
+    let k = 0;
+    (function next() {
+      if (id !== gameId) return;
+      if (k >= steps.length) {
+        state.tubes = tidied;
+        return celebrate(result);
+      }
+      const [from, to] = steps[k++];
+      const n = state.tubes[from].length;
+      state.tubes = state.tubes.map((t) => t.slice());
+      state.tubes[to].push(...state.tubes[from].splice(0));
+      render(to, n);
+      setTimeout(next, 350);
+    })();
+  }
+
+  function celebrate(result) {
     render();
     buzz([60, 60, 60]);
     const time = Scores.formatTime(state.elapsed);
-    const result = Scores.record('sort', scoreKey(), state.elapsed, !state.hintsUsed);
     const base = `Sorted in ${time} with ${state.moves} moves!`;
     if (result.isNew && result.previous !== null) {
       setMessage(`${base} 🏆 New best (was ${Scores.formatTime(result.previous)})`, 'win');
@@ -365,6 +416,8 @@
   if (load()) {
     render();
     if (state.finished) {
+      state.tubes = tidyMoves(state.tubes).tubes;
+      render();
       boardEl.classList.add('solved');
       setMessage('Tap New to play again.');
     } else if (isActive()) {

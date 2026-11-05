@@ -1,4 +1,5 @@
 :root {
+  color-scheme: light;
   --bg: #f6f7f9;
   --surface: #ffffff;
   --text: #1d2330;
@@ -26,8 +27,9 @@
   --g-edge: #1d2330;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
+/* Dark theme (the default; set on <html data-theme="dark"> before the page draws). */
+:root[data-theme="dark"] {
+    color-scheme: dark;
     --bg: #12151c;
     --surface: #1b2029;
     --text: #e6e9ef;
@@ -48,7 +50,6 @@
     --g5: #46679c; --g6: #6a5498; --g7: #964d81; --g8: #a3906f; --g9: #5d6574;
     --g-mark: #f4f6fa;
     --g-edge: #0b0d12;
-  }
 }
 
 * { box-sizing: border-box; }
@@ -99,7 +100,8 @@ main {
 }
 .topbar .tabs { flex: 1; }
 .icon-btn {
-  width: 48px;
+  width: 44px;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -480,9 +482,10 @@ button:active { transform: scale(0.96); }
   padding: 4px;
   width: calc(var(--sq) + 12px);
   height: calc(var(--sq) * 4.5 + 9px + 12px);
+  /* Open-top rectangle with sharp corners. */
   border: 2px solid var(--line-strong);
   border-top-color: transparent;
-  border-radius: 4px 4px 14px 14px;
+  border-radius: 0;
   background: var(--surface);
   transition: transform 0.15s ease;
 }
@@ -497,7 +500,7 @@ button:active { transform: scale(0.96); }
   flex: 0 0 auto;
   width: var(--sq);
   height: var(--sq);
-  border-radius: 5px;
+  border-radius: 2px;
   background: var(--c);
   color: rgb(255 255 255 / 0.85);
   display: flex;
@@ -523,3 +526,8 @@ button:active { transform: scale(0.96); }
 @media (prefers-reduced-motion: reduce) {
   .tube, .square.arrived, .tube.blocked, .s-board.solved .tube.done { animation: none; transition: none; }
 }
+
+/* ===================== Theme toggle ===================== */
+/* Show the icon for the theme you'd switch to. */
+:root[data-theme="dark"] .icon-moon,
+:root:not([data-theme="dark"]) .icon-sun { display: none; }
