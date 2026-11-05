@@ -7,6 +7,7 @@
   const isActive = () => GameMode.isActive('groups');
 
   const boardEl = document.getElementById('g-board');
+  const groupsEl = document.getElementById('g-groups');
   const sizeEl = document.getElementById('g-size');
   const levelEl = document.getElementById('g-level');
   const timerEl = document.getElementById('g-timer');
@@ -30,6 +31,7 @@
   };
 
   let cells = [];
+  let chips = [];   // chips[group] = its colour box above the board
 
   // ---------- Helpers ----------
 
@@ -141,6 +143,19 @@
       boardEl.appendChild(cell);
       cells.push(cell);
     }
+    // One box per group, in the colour of the group, ordered by where each group
+    // first appears on the board (reading order). It shows an O once the group has one.
+    const order = [];
+    state.regions.forEach((g) => { if (!order.includes(g)) order.push(g); });
+    chips = [];
+    groupsEl.replaceChildren(...order.map((g) => {
+      const chip = document.createElement('span');
+      chip.className = 'g-chip';
+      chip.setAttribute('role', 'listitem');
+      chip.style.setProperty('--fill', `var(--g${state.colors[g]})`);
+      chips[g] = chip;
+      return chip;
+    }));
   }
 
   // Indices of Os that break a rule.
@@ -174,6 +189,23 @@
         `Row ${rowOf(i) + 1}, column ${colOf(i) + 1}${m === CIRCLE ? ', O' : m === CROSS ? ', crossed out' : ''}`);
     });
     boardEl.classList.toggle('solved', state.finished);
+    // Colour boxes: O when the group has an O; red when any of its Os breaks a
+    // rule (two in the group, or sharing a row or column with, or touching, another O).
+    const os = new Array(state.size).fill(0);
+    const wrong = new Array(state.size).fill(false);
+    state.marks.forEach((m, i) => {
+      if (m !== CIRCLE) return;
+      os[state.regions[i]]++;
+      if (bad.has(i)) wrong[state.regions[i]] = true;
+    });
+    chips.forEach((chip, g) => {
+      chip.classList.toggle('done', os[g] > 0);
+      chip.classList.toggle('conflict', wrong[g]);
+      chip.setAttribute('aria-label', `Group ${chips.indexOf(chip) + 1}: ` +
+        (os[g] > 1 ? `${os[g]} Os` : os[g] ? 'has its O' : 'no O yet') +
+        (wrong[g] ? ', breaks a rule' : ''));
+    });
+    groupsEl.classList.toggle('solved', state.finished);
     timerEl.textContent = formatTime(elapsedMs());
     renderBest();
   }
