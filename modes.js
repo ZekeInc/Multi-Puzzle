@@ -30,8 +30,9 @@
   });
 
   // Size the app to the height that is actually visible. On phones, 100dvh can
-  // disagree with what Safari really shows (toolbars, notch, home bar), which
-  // made the page scroll. --app-h is used by `main` and the board sizes.
+  // disagree with what the browser really shows (sliding address bar, notch,
+  // navigation bar), which made the page scroll. Seen in Android Chrome /
+  // Samsung Internet. --app-h is used by `main` and the board sizes.
   function setAppHeight() {
     const vv = window.visualViewport;
     // Multiply by scale so pinch-zoom doesn't shrink the layout.
@@ -40,9 +41,9 @@
     // The app always fits, so it should never sit part-way scrolled.
     if (window.scrollY) window.scrollTo(0, 0);
   }
-  // After a pull-to-refresh, Safari restores the old scroll position and its
-  // toolbars may still be animating, so start at the top and measure again
-  // once things settle.
+  // After a pull-to-refresh, the browser can restore the old scroll position
+  // while its address bar is still animating, so start at the top and measure
+  // again once things settle.
   if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
   setAppHeight();
   const settle = () => { setAppHeight(); setTimeout(setAppHeight, 350); };
