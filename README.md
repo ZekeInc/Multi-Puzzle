@@ -3,7 +3,7 @@ Logic puzzles with no ads.
 
 **▶ [Play now](https://zekeinc.github.io/Multi-Puzzle/)** — https://zekeinc.github.io/Multi-Puzzle/
 
-Simple, dependency-free logic puzzles in plain HTML, CSS and JavaScript, with two modes: **Sudoku** and **Groups**. Switch between them with the tabs at the top.
+Simple, dependency-free logic puzzles in plain HTML, CSS and JavaScript, with three modes: **Sudoku**, **Groups** and **Sort**. Switch between them with the tabs at the top.
 
 Built for phones: it can be installed to your home screen, runs full-screen,
 works offline, and remembers your game when you switch apps.
@@ -29,9 +29,20 @@ Every puzzle is randomly generated and has exactly one solution.
 - Os that break a rule are highlighted in red
 - Undo, clear, check and hint; timer and progress saved per mode
 
+## Sort mode
+Tubes hold stacks of coloured squares: one tube per colour, plus 1–3 empty extra tubes.
+Tap a tube to pick up its top square (and any matching squares under it), then tap another
+tube to drop them. You can only drop onto an empty tube or the same colour, and each tube
+holds 4 squares. The puzzle is solved when no tube holds more than one colour.
+
+- 4–10 colours and 1–3 extra tubes (up to 9 colours with 1 extra tube)
+- Every puzzle is checked by a solver to make sure it can be won
+- Undo, restart, hints, and a warning when no moves are left
+- Each colour also has its own symbol, so colours are easy to tell apart
+
 ## Best times
 Tap the 🏆 button to see your fastest time and number of puzzles solved for every
-Sudoku difficulty and Groups size. Your best for the current one also shows above the board.
+Sudoku difficulty, Groups size and Sort setup (colours + extra tubes). Your best for the current one also shows above the board.
 Games where you used Hint or Solve don't count toward best times. Best times are saved on
 your device and can be reset from the same screen.
 
@@ -52,5 +63,7 @@ your device and can be reset from the same screen.
 - `groups-app.js` — Groups UI and controls
 - `modes.js` — switching between the two modes
 - `scores.js` — best times and the Best times screen
+- `sort.js` — Sort rules, solver and solvable puzzle generator
+- `sort-app.js` — Sort UI and controls
 - `index.html`, `style.css` — page and styles
 - `manifest.webmanifest`, `sw.js`, `icons/` — home-screen install and offline support

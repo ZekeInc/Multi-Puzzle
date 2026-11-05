@@ -14,6 +14,13 @@
       title: 'Groups',
       keys: [5, 6, 7, 8, 9, 10].map((n) => [String(n), `${n} × ${n}`]),
     },
+    sort: {
+      title: 'Sort',
+      // Many colour/extra-tube combinations exist, so only played ones are listed.
+      onlyPlayed: true,
+      keys: [].concat(...[4, 5, 6, 7, 8, 9, 10].map((c) =>
+        [1, 2, 3].map((e) => [`${c}-${e}`, `${c} colours, ${e} extra`]))),
+    },
   };
 
   function readAll() {
@@ -73,6 +80,7 @@
       const tbody = document.createElement('tbody');
       for (const [key, label] of cat.keys) {
         const { best, solved } = get(game, key);
+        if (cat.onlyPlayed && !solved) continue;
         const tr = document.createElement('tr');
         const cells = [label, best === null ? '—' : formatTime(best), String(solved)];
         cells.forEach((text, i) => {
@@ -84,7 +92,14 @@
         tbody.appendChild(tr);
       }
       table.appendChild(tbody);
-      body.append(h, table);
+      if (!tbody.children.length) {
+        const p = document.createElement('p');
+        p.className = 'note';
+        p.textContent = 'No puzzles solved yet.';
+        body.append(h, p);
+      } else {
+        body.append(h, table);
+      }
     }
   }
 
