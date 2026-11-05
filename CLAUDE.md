@@ -49,7 +49,7 @@ with `require()` for testing.
   into one full box automatically (`tidyMoves` in `sort-app.js`, not counted as moves).
 - Squares use the muted palette `--s0`–`--s9` and show numbers 1–10. Colour 7 (walnut,
   index 6) uses a white number (`LIGHT_INK`).
-- A selected box is highlighted only (no movement). A completed box (full, one colour) closes
+- Selecting a box changes nothing on the box itself: the squares that would move (its top run of one colour, `Sort.topRun`) get a halo (`.square.lifted`, `--halo`). Nothing moves. A completed box (full, one colour) closes
   its top. Boxes are sized to the available space in 1–3 rows by `layout()`.
 
 ## Testing

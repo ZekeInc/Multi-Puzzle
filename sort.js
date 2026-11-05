@@ -118,7 +118,7 @@
     throw new Error('Could not generate a puzzle');
   }
 
-  const api = { CAPACITY, generate, solve, moveCount, applyMove, isSolved, moves };
+  const api = { CAPACITY, generate, solve, topRun, moveCount, applyMove, isSolved, moves };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Sort = api;
 })(this);
