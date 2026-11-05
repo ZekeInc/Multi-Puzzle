@@ -32,6 +32,7 @@
     tubes: [],
     history: [],
     selected: -1,
+    hintTo: -1,       // box the current hint says to drop on (stays marked until the next tap)
     moves: 0,
     elapsed: 0,
     runStart: 0,
@@ -107,7 +108,7 @@
       Object.assign(state, d, {
         cap: d.cap || Sort.CAPACITY, empty: d.empty || 0,
         mix: !!d.mix, level: d.level || 'random',
-        history: [], selected: -1, runStart: 0, hintsUsed: !!d.hintsUsed,
+        history: [], selected: -1, hintTo: -1, runStart: 0, hintsUsed: !!d.hintsUsed,
       });
       showOptions();
       return true;
@@ -216,6 +217,7 @@
       btn.className = 'tube';
       btn.dataset.index = t;
       if (t === sel) btn.classList.add('selected');
+      if (t === state.hintTo) btn.classList.add('hint-to');
       if (tubeDone(tube)) btn.classList.add('done');
       // The selected box's top run of one colour is what would move.
       const lifted = t === sel ? Sort.topRun(tube) : 0;
@@ -280,7 +282,7 @@
       }
       Object.assign(state, {
         colors, extra, cap, empty, mix, level, initial: tubes.map((t) => t.slice()), tubes,
-        history: [], selected: -1, moves: 0, elapsed: 0, runStart: 0,
+        history: [], selected: -1, hintTo: -1, moves: 0, elapsed: 0, runStart: 0,
         finished: false, hintsUsed: false,
       });
       if (isActive()) startTimer();
@@ -302,6 +304,7 @@
     state.tubes = state.initial.map((t) => t.slice());
     state.moves = 0;
     state.selected = -1;
+    state.hintTo = -1;
     setMessage('');
     render();
     save();
@@ -325,6 +328,7 @@
 
   function tap(t) {
     if (state.finished) return;
+    state.hintTo = -1;   // any tap ends the hint: either its move or the player's own
     const sel = state.selected;
     if (sel < 0) {
       if (state.tubes[t].length) { state.selected = t; render(); }
@@ -355,6 +359,7 @@
     state.tubes = prev.tubes;
     state.moves = prev.moves;
     state.selected = -1;
+    state.hintTo = -1;
     setMessage('');
     render();
     save();
@@ -370,13 +375,13 @@
       return;
     }
     state.hintsUsed = true;
+    // Pick up the blocks to move (they glow) and mark the box to drop them on,
+    // so one tap on the marked box makes exactly the hinted move.
     const [from, to] = result.moves[0];
-    state.selected = -1;
+    state.selected = from;
+    state.hintTo = to;
     render();
-    const a = boardEl.children[from], b = boardEl.children[to];
-    a.classList.add('hint-from');
-    b.classList.add('hint-to');
-    setMessage(`Move from box ${from + 1} to box ${to + 1}.`);
+    setMessage(`Tap the marked box (box ${to + 1}) to move the glowing blocks there.`);
     save();
   }
 
@@ -384,6 +389,7 @@
     pauseTimer();
     state.finished = true;
     state.selected = -1;
+    state.hintTo = -1;
     // Save the tidied board straight away; the animation below is just for show.
     const { steps, tubes: tidied } = tidyMoves(state.tubes);
     const shown = state.tubes;
