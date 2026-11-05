@@ -24,25 +24,19 @@
     colors: [],     // colors[group] = palette index
     marks: [],      // EMPTY / CROSS / CIRCLE per cell
     history: [],
-    elapsed: 0,
-    runStart: 0,
     finished: false,
     hintsUsed: false,
   };
 
   let cells = [];
+  let shown = [];   // shown[i]: what cells[i] currently displays, so unchanged squares are left alone
   let chips = [];   // chips[group] = its colour box above the board
+  let chipShown = [];
 
   // ---------- Helpers ----------
 
-  function setMessage(text, cls) {
-    messageEl.textContent = text;
-    messageEl.className = 'message' + (cls ? ' ' + cls : '');
-  }
-
-  function buzz(pattern) {
-    if (navigator.vibrate) navigator.vibrate(pattern);
-  }
+  const setMessage = GameMode.message(messageEl);
+  const { buzz, formatTime } = GameMode;
 
   function shuffle(arr) {
     for (let i = arr.length - 1; i > 0; i--) {
@@ -58,34 +52,7 @@
 
   // ---------- Timer ----------
 
-  function elapsedMs() {
-    return state.elapsed + (state.runStart ? Date.now() - state.runStart : 0);
-  }
-  function startTimer() {
-    if (!state.runStart && !state.finished && state.size) state.runStart = Date.now();
-  }
-  function pauseTimer() {
-    if (state.runStart) {
-      state.elapsed += Date.now() - state.runStart;
-      state.runStart = 0;
-    }
-  }
-  function formatTime(ms) {
-    const secs = Math.floor(ms / 1000);
-    return `${String(Math.floor(secs / 60)).padStart(2, '0')}:${String(secs % 60).padStart(2, '0')}`;
-  }
-
-  setInterval(() => { timerEl.textContent = formatTime(elapsedMs()); }, 500);
-
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) { pauseTimer(); save(); }
-    else if (isActive()) startTimer();
-  });
-  window.addEventListener('pagehide', save);
-  window.addEventListener('modechange', () => {
-    if (isActive()) startTimer();
-    else { pauseTimer(); save(); }
-  });
+  const timer = GameMode.timer('groups', timerEl, () => state.size > 0 && !state.finished, save);
 
   // ---------- Saving ----------
 
@@ -99,7 +66,7 @@
         solution: state.solution,
         colors: state.colors,
         marks: state.marks,
-        elapsed: elapsedMs(),
+        elapsed: timer.ms(),
         finished: state.finished,
         hintsUsed: state.hintsUsed,
       }));
@@ -112,9 +79,9 @@
       if (!d || d.regions.length !== d.size * d.size) return false;
       Object.assign(state, {
         size: d.size, level: d.level || null, regions: d.regions, solution: d.solution, colors: d.colors,
-        marks: d.marks, elapsed: d.elapsed, finished: d.finished, hintsUsed: !!d.hintsUsed,
-        history: [], runStart: 0,
+        marks: d.marks, finished: d.finished, hintsUsed: !!d.hintsUsed, history: [],
       });
+      timer.reset(d.elapsed);
       sizeEl.value = String(d.size);
       if (d.level) levelEl.value = d.level;
       return true;
@@ -130,6 +97,8 @@
     boardEl.style.setProperty('--n', n);
     boardEl.replaceChildren();
     cells = [];
+    shown = [];
+    chipShown = [];
     for (let i = 0; i < n * n; i++) {
       const r = rowOf(i), c = colOf(i), g = state.regions[i];
       const cell = document.createElement('div');
@@ -148,9 +117,10 @@
     const order = [];
     state.regions.forEach((g) => { if (!order.includes(g)) order.push(g); });
     chips = [];
-    groupsEl.replaceChildren(...order.map((g) => {
+    groupsEl.replaceChildren(...order.map((g, k) => {
       const chip = document.createElement('span');
       chip.className = 'g-chip';
+      chip.dataset.n = k + 1;
       chip.setAttribute('role', 'listitem');
       chip.style.setProperty('--fill', `var(--g${state.colors[g]})`);
       chips[g] = chip;
@@ -182,6 +152,9 @@
     const { bad } = findConflicts();
     cells.forEach((cell, i) => {
       const m = state.marks[i];
+      const look = m * 2 + bad.has(i);
+      if (look === shown[i]) return;
+      shown[i] = look;
       cell.classList.toggle('cross', m === CROSS);
       cell.classList.toggle('circle', m === CIRCLE);
       cell.classList.toggle('conflict', bad.has(i));
@@ -199,14 +172,17 @@
       if (bad.has(i)) wrong[state.regions[i]] = true;
     });
     chips.forEach((chip, g) => {
+      const look = os[g] * 2 + wrong[g];
+      if (look === chipShown[g]) return;
+      chipShown[g] = look;
       chip.classList.toggle('done', os[g] > 0);
       chip.classList.toggle('conflict', wrong[g]);
-      chip.setAttribute('aria-label', `Group ${chips.indexOf(chip) + 1}: ` +
+      chip.setAttribute('aria-label', `Group ${chip.dataset.n}: ` +
         (os[g] > 1 ? `${os[g]} Os` : os[g] ? 'has its O' : 'no O yet') +
         (wrong[g] ? ', breaks a rule' : ''));
     });
     groupsEl.classList.toggle('solved', state.finished);
-    timerEl.textContent = formatTime(elapsedMs());
+    timer.show();
     renderBest();
   }
 
@@ -244,12 +220,11 @@
         colors: palette.slice(0, n),
         marks: new Array(n * n).fill(EMPTY),
         history: [],
-        elapsed: 0,
-        runStart: 0,
         finished: false,
         hintsUsed: false,
       });
-      if (isActive()) startTimer();
+      timer.reset(0);
+      timer.start();
       buildBoard();
       render();
       setMessage('');
@@ -274,23 +249,15 @@
   }
 
   function finish() {
-    pauseTimer();
+    timer.pause();
     state.finished = true;
     // Fill every remaining square with ✕ for a tidy finished board.
     state.marks = state.marks.map((m) => (m === CIRCLE ? CIRCLE : CROSS));
     render();
     buzz([60, 60, 60]);
-    const time = formatTime(state.elapsed);
-    const result = Scores.record('groups', scoreKey(), state.elapsed, !state.hintsUsed);
-    if (result.isNew && result.previous !== null) {
-      setMessage(`Solved in ${time}! 🏆 New best (was ${formatTime(result.previous)})`, 'win');
-    } else if (result.isNew) {
-      setMessage(`Solved in ${time}! 🏆 First best time`, 'win');
-    } else if (state.hintsUsed) {
-      setMessage(`Solved in ${time}! 🎉 Hint used, so not counted as a best time.`, 'win');
-    } else {
-      setMessage(`Solved in ${time}! 🎉`, 'win');
-    }
+    const ms = timer.ms();
+    const result = Scores.record('groups', scoreKey(), ms, !state.hintsUsed);
+    setMessage(`Solved in ${formatTime(ms)}!${Scores.verdict(result, state.hintsUsed)}`, 'win');
     renderBest();
   }
 
@@ -355,11 +322,14 @@
   // or erases ✕ if the drag started on a ✕.
 
   let drag = null;
+  let box = null;   // the board's position, measured when a touch starts
 
+  // Square under a point, worked out from the board's position (cheaper than
+  // asking the browser what is under the finger on every move).
   function cellFromPoint(x, y) {
-    const el = document.elementFromPoint(x, y);
-    const cell = el && el.closest('.g-cell');
-    return cell && boardEl.contains(cell) ? Number(cell.dataset.index) : -1;
+    const n = state.size;
+    const c = Math.floor((x - box.left) / box.step), r = Math.floor((y - box.top) / box.step);
+    return r >= 0 && r < n && c >= 0 && c < n ? r * n + c : -1;
   }
 
   function paint(i) {
@@ -375,6 +345,9 @@
 
   boardEl.addEventListener('pointerdown', (e) => {
     if (state.finished || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    const rect = boardEl.getBoundingClientRect();
+    const border = boardEl.clientLeft;
+    box = { left: rect.left + border, top: rect.top + border, step: boardEl.clientWidth / state.size };
     const i = cellFromPoint(e.clientX, e.clientY);
     if (i < 0) return;
     e.preventDefault();
@@ -436,20 +409,13 @@
     if (state.size) sizeEl.value = String(state.size);
     if (state.level) levelEl.value = state.level;
   }
-  function showPrefs(show) {
-    if (show) showOptions();
-    prefsEl.hidden = !show;
-    prefsBtn.setAttribute('aria-expanded', String(show));
-    if (show) levelEl.focus();
-    else prefsBtn.focus();
-  }
   function cancelPrefs() {
     showOptions();
     showPrefs(false);
   }
-  prefsBtn.addEventListener('click', () => showPrefs(true));
+  const showPrefs = GameMode.popup(prefsEl, prefsBtn, levelEl, cancelPrefs);
+  prefsBtn.addEventListener('click', () => { showOptions(); showPrefs(true); });
   document.getElementById('g-prefs-cancel').addEventListener('click', cancelPrefs);
-  prefsEl.addEventListener('click', (e) => { if (e.target === prefsEl) cancelPrefs(); });
   document.getElementById('g-prefs-apply').addEventListener('click', () => {
     if (!confirmNew()) return;
     showPrefs(false);
@@ -459,18 +425,11 @@
   document.getElementById('g-clear').addEventListener('click', clearBoard);
   document.getElementById('g-check').addEventListener('click', check);
   document.getElementById('g-hint').addEventListener('click', hint);
-  function showRules(show) {
-    rulesEl.hidden = !show;
-    rulesBtn.setAttribute('aria-expanded', String(show));
-    if (show) document.getElementById('g-rules-close').focus();
-  }
+  const showRules = GameMode.popup(rulesEl, rulesBtn, document.getElementById('g-rules-close'));
   rulesBtn.addEventListener('click', () => showRules(true));
   document.getElementById('g-rules-close').addEventListener('click', () => showRules(false));
-  rulesEl.addEventListener('click', (e) => { if (e.target === rulesEl) showRules(false); });
 
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !rulesEl.hidden) return showRules(false);
-    if (e.key === 'Escape' && !prefsEl.hidden) return cancelPrefs();
     if (isActive() && (e.ctrlKey || e.metaKey) && e.key === 'z') undo();
   });
 
@@ -480,15 +439,11 @@
     buildBoard();
     render();
     if (state.finished) setMessage('Tap New to play again.');
-    else if (isActive()) startTimer();
+    else timer.start();
   } else {
-    newGame();
-    // Show the rules the first time someone opens this mode.
-    if (isActive()) showRules(true);
-    else window.addEventListener('modechange', function first() {
-      if (!isActive()) return;
-      window.removeEventListener('modechange', first);
-      if (!state.marks.some((m) => m !== EMPTY)) showRules(true);
-    });
+    // First time here: make a puzzle (only once the tab is opened, so the
+    // other games start faster) and show the rules.
+    renderBest();
+    GameMode.whenShown('groups', () => { newGame(); showRules(true); });
   }
 })();

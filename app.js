@@ -23,8 +23,6 @@
     selected: -1,
     notesMode: false,
     mistakes: 0,
-    elapsed: 0,      // ms accumulated before the current run
-    runStart: 0,     // timestamp the timer last resumed, 0 when paused
     finished: false,
     hintsUsed: false,
     difficulty: 'medium',
@@ -33,6 +31,7 @@
   // ---------- Build the board and number pad ----------
 
   const cells = [];
+  const shown = [];   // shown[i]: what cells[i] currently displays, so unchanged squares are left alone
   for (let i = 0; i < 81; i++) {
     const cell = document.createElement('div');
     cell.className = 'cell';
@@ -46,24 +45,20 @@
     cells.push(cell);
   }
 
+  const keys = [];
   for (let n = 1; n <= 9; n++) {
     const btn = document.createElement('button');
     btn.textContent = n;
     btn.setAttribute('aria-label', `Enter ${n}`);
     btn.addEventListener('click', () => input(n));
     numpadEl.appendChild(btn);
+    keys.push(btn);
   }
 
   // ---------- Helpers ----------
 
-  function setMessage(text, cls) {
-    messageEl.textContent = text;
-    messageEl.className = 'message' + (cls ? ' ' + cls : '');
-  }
-
-  function buzz(pattern) {
-    if (navigator.vibrate) navigator.vibrate(pattern);
-  }
+  const setMessage = GameMode.message(messageEl);
+  const { buzz, formatTime } = GameMode;
 
   function isGiven(i) {
     return state.puzzle[i] !== 0;
@@ -76,51 +71,9 @@
       (Math.floor(ra / 3) === Math.floor(rb / 3) && Math.floor(ca / 3) === Math.floor(cb / 3));
   }
 
-  // ---------- Timer (pauses while the app is in the background) ----------
+  // ---------- Timer (runs only while this tab shows and the app is in front) ----------
 
-  function elapsedMs() {
-    return state.elapsed + (state.runStart ? Date.now() - state.runStart : 0);
-  }
-
-  function startTimer() {
-    if (!state.runStart && !state.finished) state.runStart = Date.now();
-  }
-
-  function pauseTimer() {
-    if (state.runStart) {
-      state.elapsed += Date.now() - state.runStart;
-      state.runStart = 0;
-    }
-  }
-
-  function formatTime(ms) {
-    const secs = Math.floor(ms / 1000);
-    const m = String(Math.floor(secs / 60)).padStart(2, '0');
-    const s = String(secs % 60).padStart(2, '0');
-    return `${m}:${s}`;
-  }
-
-  setInterval(() => { timerEl.textContent = formatTime(elapsedMs()); }, 500);
-
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-      pauseTimer();
-      save();
-    } else if (isActive()) {
-      startTimer();
-    }
-  });
-  window.addEventListener('pagehide', save);
-
-  // Pause while the other game mode is showing.
-  window.addEventListener('modechange', () => {
-    if (isActive()) {
-      startTimer();
-    } else {
-      pauseTimer();
-      save();
-    }
-  });
+  const timer = GameMode.timer('sudoku', timerEl, () => state.puzzle.length > 0 && !state.finished, save);
 
   // ---------- Saving progress ----------
 
@@ -133,7 +86,7 @@
         board: state.board,
         notes: state.notes.map((s) => [...s]),
         mistakes: state.mistakes,
-        elapsed: elapsedMs(),
+        elapsed: timer.ms(),
         finished: state.finished,
         hintsUsed: state.hintsUsed,
         difficulty: state.difficulty,
@@ -150,12 +103,11 @@
       state.board = data.board;
       state.notes = data.notes.map((a) => new Set(a));
       state.mistakes = data.mistakes;
-      state.elapsed = data.elapsed;
+      timer.reset(data.elapsed);
       state.finished = data.finished;
       state.hintsUsed = !!data.hintsUsed;
       state.difficulty = data.difficulty;
       state.history = [];
-      state.runStart = 0;
       difficultyEl.value = data.difficulty;
       return true;
     } catch (e) {
@@ -180,9 +132,8 @@
       state.finished = false;
       state.hintsUsed = false;
       state.difficulty = difficultyEl.value;
-      state.elapsed = 0;
-      state.runStart = 0;
-      if (isActive()) startTimer();
+      timer.reset(0);
+      timer.start();
       setMessage('');
       render();
       save();
@@ -299,24 +250,15 @@
   }
 
   function finish(won) {
-    pauseTimer();
+    timer.pause();
     state.finished = true;
     render();
     save();
     if (won) {
       buzz([60, 60, 60]);
-      const time = formatTime(state.elapsed);
-      const result = Scores.record('sudoku', state.difficulty, state.elapsed, !state.hintsUsed);
-      if (result.isNew && result.previous !== null) {
-        setMessage(`Solved in ${time}! 🏆 New best (was ${formatTime(result.previous)})`, 'win');
-      } else if (result.isNew) {
-        setMessage(`Solved in ${time}! 🏆 First best time`, 'win');
-      } else if (state.hintsUsed) {
-        setMessage(`Solved in ${time}! 🎉 Hint used, so not counted as a best time.`, 'win');
-      } else {
-        setMessage(`Solved in ${time}! 🎉`, 'win');
-      }
-      renderBest();
+      const ms = timer.ms();
+      const result = Scores.record('sudoku', state.difficulty, ms, !state.hintsUsed);
+      setMessage(`Solved in ${formatTime(ms)}!${Scores.verdict(result, state.hintsUsed)}`, 'win');
     } else {
       setMessage('Solution revealed. Tap New to play again.');
     }
@@ -338,37 +280,41 @@
     for (let i = 0; i < 81; i++) {
       const cell = cells[i];
       const v = state.board[i];
+      const given = isGiven(i);
 
-      cell.classList.toggle('given', isGiven(i));
+      cell.classList.toggle('given', given);
       cell.classList.toggle('selected', i === sel);
       cell.classList.toggle('related', sel >= 0 && i !== sel && sameUnit(i, sel));
       cell.classList.toggle('same', selVal !== 0 && v === selVal && i !== sel);
-      const wrong = !isGiven(i) && v !== 0 && v !== state.solution[i];
-      cell.classList.toggle('error', wrong || (conflicts.has(i) && !isGiven(i)));
+      const wrong = !given && v !== 0 && v !== state.solution[i];
+      cell.classList.toggle('error', wrong || (conflicts.has(i) && !given));
 
-      if (v !== 0) {
-        cell.textContent = v;
-      } else if (state.notes[i].size) {
+      // A number, a 3 × 3 grid of notes, or nothing. Only rebuilt when it changes.
+      const notes = state.notes[i];
+      const content = v ? String(v) : notes.size ? 'n' + [...notes].sort().join('') : '';
+      if (content === shown[i]) continue;
+      shown[i] = content;
+      if (v || !notes.size) {
+        cell.textContent = content;
+      } else {
         const grid = document.createElement('div');
         grid.className = 'notes';
         for (let n = 1; n <= 9; n++) {
           const span = document.createElement('span');
-          span.textContent = state.notes[i].has(n) ? n : '';
+          span.textContent = notes.has(n) ? n : '';
           grid.appendChild(span);
         }
         cell.replaceChildren(grid);
-      } else {
-        cell.textContent = '';
       }
     }
 
     // Fade numbers that have all 9 placed correctly.
     const counts = new Array(10).fill(0);
     state.board.forEach((v, i) => { if (v && v === state.solution[i]) counts[v]++; });
-    [...numpadEl.children].forEach((btn, k) => btn.classList.toggle('done', counts[k + 1] === 9));
+    keys.forEach((btn, k) => btn.classList.toggle('done', counts[k + 1] === 9));
 
     mistakesEl.textContent = `Mistakes: ${state.mistakes}`;
-    timerEl.textContent = formatTime(elapsedMs());
+    timer.show();
     renderBest();
   }
 
@@ -419,7 +365,7 @@
   if (load()) {
     render();
     if (state.finished) setMessage('Tap New to play again.');
-    else if (isActive()) startTimer();
+    else timer.start();
   } else {
     newGame();
   }

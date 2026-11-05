@@ -15,7 +15,6 @@
   'use strict';
 
   const CAPACITY = 4;      // default blocks per tube
-  const MIN_CAP = 3, MAX_CAP = 6;
   const LEVELS = ['easy', 'medium', 'hard', 'expert'];   // plus 'random' (not graded)
 
   const capOf = (rules) => (rules && rules.cap) || CAPACITY;
@@ -56,11 +55,6 @@
 
   function isSolved(state) {
     return state.every((t) => t.every((c) => c === t[0]));
-  }
-
-  function key(state) {
-    // Tubes are interchangeable, so sort them for a canonical key.
-    return state.map((t) => t.join(',')).sort().join('|');
   }
 
   // Useful moves only: skip moving a whole single-colour tube into an empty one.
@@ -131,8 +125,19 @@
     limit = limit || 200000;
     const cap = capOf(rules), mix = !!(rules && rules.mix);
     const W = 6;
-    const keyOf = (s) => s.slice().sort().join('|');
-    const sorted = (s) => s.every((t) => !t || t === t[0].repeat(t.length));
+    // Tubes are interchangeable, so the key lists them in sorted order
+    // (insertion sort: faster than Array#sort for a dozen short strings).
+    const keyOf = (s) => {
+      const a = s.slice();
+      for (let i = 1; i < a.length; i++) {
+        const v = a[i];
+        let j = i;
+        for (; j > 0 && a[j - 1] > v; j--) a[j] = a[j - 1];
+        a[j] = v;
+      }
+      return a.join('|');
+    };
+    // Places where a tube changes colour; 0 means solved.
     const breaks = (s) => {
       let n = 0;
       for (const t of s) for (let k = 1; k < t.length; k++) if (t[k] !== t[k - 1]) n++;
@@ -141,22 +146,22 @@
     // Each child position with the move that leads to it.
     function children(s) {
       const out = [];
-      const sources = new Set();
+      const sources = [];   // short lists: faster than Sets at this size
       for (let i = 0; i < s.length; i++) {
         const a = s[i];
-        if (!a || sources.has(a)) continue;   // a tube identical to one already tried
-        sources.add(a);
+        if (!a || sources.includes(a)) continue;   // a tube identical to one already tried
+        sources.push(a);
         const c = a[a.length - 1];
         let run = 1;
         while (run < a.length && a[a.length - 1 - run] === c) run++;
         const uniform = run === a.length;
-        const targets = new Set();
+        const targets = [];
         for (let j = 0; j < s.length; j++) {
           const b = s[j];
-          if (j === i || b.length >= cap || targets.has(b)) continue;
+          if (j === i || b.length >= cap || targets.includes(b)) continue;
           if (b && b[b.length - 1] !== c && !mix) continue;
           if (!b && uniform) continue;          // pointless: just moves a sorted tube
-          targets.add(b);
+          targets.push(b);
           const n = Math.min(run, cap - b.length);
           const next = s.slice();
           next[i] = a.slice(0, a.length - n);
@@ -168,7 +173,7 @@
     }
 
     const start = state.map((t) => t.map((c) => String.fromCharCode(97 + c)).join(''));
-    if (sorted(start)) return { moves: [], unsolvable: false, explored: 0 };
+    if (!breaks(start)) return { moves: [], unsolvable: false, explored: 0 };
     const seen = new Set([keyOf(start)]);
     const heap = Heap();
     let order = 0, explored = 0;
@@ -177,16 +182,17 @@
       const node = heap.pop()[2];
       if (++explored > limit) return { moves: null, unsolvable: false, explored };
       for (const [s, move] of children(node.s)) {
-        const k = keyOf(s);
-        if (seen.has(k)) continue;
-        seen.add(k);
+        const size = seen.size;
+        seen.add(keyOf(s));       // one lookup: the size only grows for a new position
+        if (seen.size === size) continue;
         const path = { move, prev: node.path };
-        if (sorted(s)) {
+        const h = breaks(s);
+        if (!h) {
           const out = [];
           for (let p = path; p; p = p.prev) out.push(p.move);
           return { moves: out.reverse(), unsolvable: false, explored };
         }
-        heap.push([node.g + 1 + W * breaks(s), order++, { s, g: node.g + 1, path }]);
+        heap.push([node.g + 1 + W * h, order++, { s, g: node.g + 1, path }]);
       }
     }
     // Every reachable position was checked.
@@ -238,7 +244,7 @@
   }
 
   const api = {
-    CAPACITY, MIN_CAP, MAX_CAP, LEVELS, maxEmpty, minEmptyNoExtra,
+    CAPACITY, LEVELS, maxEmpty, minEmptyNoExtra,
     generate, solve, topRun, moveCount, applyMove, isSolved, moves,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

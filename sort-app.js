@@ -34,21 +34,14 @@
     selected: -1,
     hintTo: -1,       // box the current hint says to drop on (stays marked until the next tap)
     moves: 0,
-    elapsed: 0,
-    runStart: 0,
     finished: false,
     hintsUsed: false,
   };
 
   // ---------- Helpers ----------
 
-  function setMessage(text, cls) {
-    messageEl.textContent = text;
-    messageEl.className = 'message' + (cls ? ' ' + cls : '');
-  }
-  function buzz(pattern) {
-    if (navigator.vibrate) navigator.vibrate(pattern);
-  }
+  const setMessage = GameMode.message(messageEl);
+  const { buzz, formatTime } = GameMode;
   // Best-time key: `colours-extra`, then `-cap-empty` unless the default box
   // (4 blocks, starts full), `-any` with the mix rule, and `-level` unless Random.
   // A game from before these options keeps the original short key.
@@ -62,30 +55,8 @@
 
   // ---------- Timer ----------
 
-  function elapsedMs() {
-    return state.elapsed + (state.runStart ? Date.now() - state.runStart : 0);
-  }
-  function startTimer() {
-    if (!state.runStart && !state.finished && state.colors) state.runStart = Date.now();
-  }
-  function pauseTimer() {
-    if (state.runStart) {
-      state.elapsed += Date.now() - state.runStart;
-      state.runStart = 0;
-    }
-  }
-  setInterval(() => { timerEl.textContent = Scores.formatTime(elapsedMs()); }, 500);
-
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) { pauseTimer(); save(); }
-    else if (isActive()) startTimer();
-  });
-  window.addEventListener('pagehide', save);
-  window.addEventListener('modechange', () => {
-    if (isActive()) startTimer();
-    else { pauseTimer(); save(); }
-    layout();
-  });
+  const timer = GameMode.timer('sort', timerEl, () => state.colors > 0 && !state.finished, save);
+  window.addEventListener('modechange', () => layout());
 
   // ---------- Saving ----------
 
@@ -96,7 +67,7 @@
         colors: state.colors, extra: state.extra, cap: state.cap, empty: state.empty,
         mix: state.mix, level: state.level,
         initial: state.initial, tubes: state.tubes,
-        moves: state.moves, elapsed: elapsedMs(), finished: state.finished, hintsUsed: state.hintsUsed,
+        moves: state.moves, elapsed: timer.ms(), finished: state.finished, hintsUsed: state.hintsUsed,
       }));
     } catch (e) { /* storage unavailable */ }
   }
@@ -105,11 +76,13 @@
     try {
       const d = JSON.parse(localStorage.getItem(SAVE_KEY));
       if (!d || !Array.isArray(d.tubes)) return false;
-      Object.assign(state, d, {
+      const { elapsed, ...rest } = d;
+      Object.assign(state, rest, {
         cap: d.cap || Sort.CAPACITY, empty: d.empty || 0,
         mix: !!d.mix, level: d.level || 'random',
-        history: [], selected: -1, hintTo: -1, runStart: 0, hintsUsed: !!d.hintsUsed,
+        history: [], selected: -1, hintTo: -1, hintsUsed: !!d.hintsUsed,
       });
+      timer.reset(elapsed);
       showOptions();
       return true;
     } catch (e) {
@@ -205,11 +178,17 @@
     boardEl.style.setProperty('--sq', `${Math.max(Math.floor(best.size), 14)}px`);
   }
   if (window.ResizeObserver) new ResizeObserver(layout).observe(wrapEl);
-  window.addEventListener('resize', layout);
+  else window.addEventListener('resize', layout);
+  let layoutFor = '';
 
   // `arrived` maps a box index to how many squares just landed on top of it.
   function render(arrived = {}) {
-    layout();
+    // Measuring forces the browser to lay out the page, so only do it when the
+    // number or size of the boxes changed (resizes are handled by the observer).
+    if (layoutFor !== `${state.tubes.length} ${state.cap}`) {
+      layoutFor = `${state.tubes.length} ${state.cap}`;
+      layout();
+    }
     const sel = state.selected;
     boardEl.replaceChildren();
     state.tubes.forEach((tube, t) => {
@@ -235,7 +214,7 @@
       boardEl.appendChild(btn);
     });
     movesEl.textContent = `Moves: ${state.moves}`;
-    timerEl.textContent = Scores.formatTime(elapsedMs());
+    timer.show();
     renderBest();
   }
 
@@ -282,10 +261,11 @@
       }
       Object.assign(state, {
         colors, extra, cap, empty, mix, level, initial: tubes.map((t) => t.slice()), tubes,
-        history: [], selected: -1, hintTo: -1, moves: 0, elapsed: 0, runStart: 0,
+        history: [], selected: -1, hintTo: -1, moves: 0,
         finished: false, hintsUsed: false,
       });
-      if (isActive()) startTimer();
+      timer.reset(0);
+      timer.start();
       setMessage('');
       showRulesText();
       render();
@@ -386,7 +366,7 @@
   }
 
   function finish() {
-    pauseTimer();
+    timer.pause();
     state.finished = true;
     state.selected = -1;
     state.hintTo = -1;
@@ -396,7 +376,7 @@
     state.tubes = tidied;
     save();
     state.tubes = shown;
-    const result = Scores.record('sort', scoreKey(), state.elapsed, !state.hintsUsed);
+    const result = Scores.record('sort', scoreKey(), timer.ms(), !state.hintsUsed);
     animateTidy(steps, tidied, result);
   }
 
@@ -418,17 +398,8 @@
   function celebrate(result) {
     render();
     buzz([60, 60, 60]);
-    const time = Scores.formatTime(state.elapsed);
-    const base = `Sorted in ${time} with ${state.moves} moves!`;
-    if (result.isNew && result.previous !== null) {
-      setMessage(`${base} 🏆 New best (was ${Scores.formatTime(result.previous)})`, 'win');
-    } else if (result.isNew) {
-      setMessage(`${base} 🏆 First best time`, 'win');
-    } else if (state.hintsUsed) {
-      setMessage(`${base} 🎉 Hint used, so no best time.`, 'win');
-    } else {
-      setMessage(`${base} 🎉`, 'win');
-    }
+    setMessage(`Sorted in ${formatTime(timer.ms())} with ${state.moves} moves!` +
+      Scores.verdict(result, state.hintsUsed, 'Hint used, so no best time.'), 'win');
     boardEl.classList.add('solved');
     save();
   }
@@ -450,23 +421,20 @@
   const prefsBtn = document.getElementById('s-prefs');
   const prefsNoteEl = document.getElementById('s-prefs-note');
 
-  function showPrefs(show) {
-    if (show) { showOptions(); prefsNoteEl.textContent = ''; }
-    prefsEl.hidden = !show;
-    prefsBtn.setAttribute('aria-expanded', String(show));
-    if (show) extraEl.focus();
-    else prefsBtn.focus();
-  }
   function cancelPrefs() {
     showOptions();
     showPrefs(false);
   }
+  const showPrefs = GameMode.popup(prefsEl, prefsBtn, extraEl, cancelPrefs);
   for (const el of [levelEl, colorsEl, extraEl, capEl, emptyEl, mixEl]) {
     el.addEventListener('change', () => { prefsNoteEl.textContent = limitOptions(); });
   }
-  prefsBtn.addEventListener('click', () => showPrefs(true));
+  prefsBtn.addEventListener('click', () => {
+    showOptions();
+    prefsNoteEl.textContent = '';
+    showPrefs(true);
+  });
   document.getElementById('s-prefs-cancel').addEventListener('click', cancelPrefs);
-  prefsEl.addEventListener('click', (e) => { if (e.target === prefsEl) cancelPrefs(); });
   document.getElementById('s-prefs-apply').addEventListener('click', () => {
     if (!confirmNew()) return;
     showPrefs(false);
@@ -483,17 +451,10 @@
   document.getElementById('s-restart').addEventListener('click', restart);
   document.getElementById('s-hint').addEventListener('click', hint);
 
-  function showRules(show) {
-    rulesEl.hidden = !show;
-    rulesBtn.setAttribute('aria-expanded', String(show));
-    if (show) document.getElementById('s-rules-close').focus();
-  }
+  const showRules = GameMode.popup(rulesEl, rulesBtn, document.getElementById('s-rules-close'));
   rulesBtn.addEventListener('click', () => showRules(true));
   document.getElementById('s-rules-close').addEventListener('click', () => showRules(false));
-  rulesEl.addEventListener('click', (e) => { if (e.target === rulesEl) showRules(false); });
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !rulesEl.hidden) return showRules(false);
-    if (e.key === 'Escape' && !prefsEl.hidden) return cancelPrefs();
     if (isActive() && (e.ctrlKey || e.metaKey) && e.key === 'z') undo();
   });
 
@@ -507,16 +468,12 @@
       render();
       boardEl.classList.add('solved');
       setMessage('Tap New to play again.');
-    } else if (isActive()) {
-      startTimer();
+    } else {
+      timer.start();
     }
   } else {
-    newGame();
-    if (isActive()) showRules(true);
-    else window.addEventListener('modechange', function first() {
-      if (!isActive()) return;
-      window.removeEventListener('modechange', first);
-      if (!state.moves) showRules(true);
-    });
+    // First time here: make a puzzle (only once the tab is opened, so the
+    // other games start faster) and show the rules.
+    GameMode.whenShown('sort', () => { newGame(); showRules(true); });
   }
 })();
