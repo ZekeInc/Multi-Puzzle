@@ -150,6 +150,8 @@
       btn.dataset.index = t;
       if (t === sel) btn.classList.add('selected');
       if (tubeDone(tube)) btn.classList.add('done');
+      // The selected box's top run of one colour is what would move.
+      const lifted = t === sel ? Sort.topRun(tube) : 0;
       const names = tube.map((c) => c + 1).join(', ');
       btn.setAttribute('aria-label', `Box ${t + 1}: ${tube.length ? names : 'empty'}${t === sel ? ', selected' : ''}`);
       tube.forEach((c, k) => {
@@ -159,6 +161,7 @@
         sq.textContent = c + 1;
         if (LIGHT_INK.has(c)) sq.classList.add('ink-light');
         if (t === arrivedTube && k >= tube.length - arrivedCount) sq.classList.add('arrived');
+        if (k >= tube.length - lifted) sq.classList.add('lifted');
         btn.appendChild(sq);
       });
       boardEl.appendChild(btn);
@@ -269,7 +272,7 @@
     const el = boardEl.children[t];
     if (el) {
       el.classList.add('blocked');
-      setTimeout(() => el.classList.remove('blocked'), 300);
+      setTimeout(() => el.classList.remove('blocked'), 150);
     }
     buzz(40);
   }
