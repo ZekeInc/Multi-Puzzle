@@ -37,8 +37,17 @@
     // Multiply by scale so pinch-zoom doesn't shrink the layout.
     const h = vv ? vv.height * vv.scale : window.innerHeight;
     document.documentElement.style.setProperty('--app-h', `${Math.round(h)}px`);
+    // The app always fits, so it should never sit part-way scrolled.
+    if (window.scrollY) window.scrollTo(0, 0);
   }
+  // After a pull-to-refresh, Safari restores the old scroll position and its
+  // toolbars may still be animating, so start at the top and measure again
+  // once things settle.
+  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
   setAppHeight();
+  const settle = () => { setAppHeight(); setTimeout(setAppHeight, 350); };
+  window.addEventListener('load', settle);
+  window.addEventListener('pageshow', settle);
   window.addEventListener('resize', setAppHeight);
   window.addEventListener('orientationchange', () => setTimeout(setAppHeight, 300));
   if (window.visualViewport) window.visualViewport.addEventListener('resize', setAppHeight);
