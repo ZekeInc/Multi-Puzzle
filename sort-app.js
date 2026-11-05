@@ -324,6 +324,7 @@
   }
 
   let gameId = 0;   // bumped by newGame so a running tidy animation stops
+  const TIDY_STEP_MS = 100;   // pause between automatic tidy-up moves
 
   function animateTidy(steps, tidied, result) {
     const id = gameId;
@@ -340,7 +341,7 @@
       state.tubes = state.tubes.map((t) => t.slice());
       state.tubes[to].push(...state.tubes[from].splice(0));
       render(to, n);
-      setTimeout(next, 350);
+      setTimeout(next, TIDY_STEP_MS);
     })();
   }
 
