@@ -29,5 +29,19 @@
     });
   });
 
+  // Size the app to the height that is actually visible. On phones, 100dvh can
+  // disagree with what Safari really shows (toolbars, notch, home bar), which
+  // made the page scroll. --app-h is used by `main` and the board sizes.
+  function setAppHeight() {
+    const vv = window.visualViewport;
+    // Multiply by scale so pinch-zoom doesn't shrink the layout.
+    const h = vv ? vv.height * vv.scale : window.innerHeight;
+    document.documentElement.style.setProperty('--app-h', `${Math.round(h)}px`);
+  }
+  setAppHeight();
+  window.addEventListener('resize', setAppHeight);
+  window.addEventListener('orientationchange', () => setTimeout(setAppHeight, 300));
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', setAppHeight);
+
   window.GameMode = { isActive: (mode) => document.body.dataset.mode === mode };
 })();
