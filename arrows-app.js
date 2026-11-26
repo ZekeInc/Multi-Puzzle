@@ -3,7 +3,7 @@
 
   const SAVE_KEY = 'arrows-save-v1';
   const NAMES = ['up', 'right', 'down', 'left'];
-  const SLIDE_MS = 260;
+  const SLIDE_MS = 420;
   const isActive = () => GameMode.isActive('arrows');
 
   const boardEl = document.getElementById('a-board');
@@ -62,6 +62,13 @@
     try {
       const d = JSON.parse(localStorage.getItem(SAVE_KEY));
       if (!d || !d.size || !Array.isArray(d.pieces) || !Array.isArray(d.order)) return false;
+      // Games from before pieces could bend: their Hard is now Easy; the old
+      // Easy and Medium are gone, so those games are dropped.
+      if (!d.pieces[0].cells) {
+        if (d.level !== 'hard') return false;
+        d.level = 'easy';
+        d.pieces = d.pieces.map((p) => Arrows.fromStraight(p, d.size));
+      }
       const removed = d.pieces.map(() => false);
       for (const id of d.order) removed[id] = true;
       Object.assign(state, {
@@ -78,50 +85,88 @@
   }
 
   // ---------- Board ----------
+  // One SVG for the whole board, in square units (square r, c has its centre
+  // at c + 0.5, r + 0.5). Each piece is a group: a thick rounded "tube" along
+  // its path, a thin shaft and a solid arrow head. All three are drawn along a
+  // line that runs from just behind the tail, through the piece, past its head
+  // and off the board. Dashes show only the piece's own part of that line, so
+  // sliding the dashes along it (and the head with them) moves the piece out
+  // along its own path, like a snake.
 
-  // The arrow drawn in cell units: a shaft from the tail to the head, and a
-  // solid head. Drawn pointing right, then turned to face `dir`.
-  function arrowSvg(len, dir) {
-    const vertical = dir === 0 || dir === 2;
-    const w = vertical ? 1 : len, h = vertical ? len : 1;
-    const turn = [
-      `translate(0 ${len}) rotate(-90)`,
-      '',
-      'translate(1 0) rotate(90)',
-      `translate(${len} 1) rotate(180)`,
-    ][dir];
-    const tip = len - 0.14, base = len - 0.5;
-    return `<svg viewBox="0 0 ${w} ${h}" aria-hidden="true"><g transform="${turn}">` +
-      `<line x1="${len === 1 ? 0.22 : 0.4}" y1="0.5" x2="${base + 0.05}" y2="0.5"/>` +
-      `<polygon points="${tip},0.5 ${base},0.2 ${base},0.8"/></g></svg>`;
+  const SVG = 'http://www.w3.org/2000/svg';
+  const TAIL = 0.3;   // the shaft starts this far behind the tail's centre
+
+  function svgEl(tag, attrs) {
+    const el = document.createElementNS(SVG, tag);
+    for (const [k, v] of Object.entries(attrs || {})) el.setAttribute(k, v);
+    return el;
+  }
+
+  // Geometry of a piece: the line's points, how far along it the head is, and
+  // how far the head travels to take the whole piece off the board.
+  function geometry(p) {
+    const n = state.size, len = p.cells.length;
+    const at = (i) => [i % n + 0.5, Math.floor(i / n) + 0.5];
+    const unit = (d) => [Arrows.DC[d], Arrows.DR[d]];
+    const tail = p.cells[len - 1];
+    const back = unit(len > 1 ? Arrows.stepDir(tail, p.cells[len - 2], n) : p.dir);
+    const [hx, hy] = at(p.cells[0]);
+    const [ux, uy] = unit(p.dir);
+    const toEdge = ux > 0 ? n - hx : ux < 0 ? hx : uy > 0 ? n - hy : hy;
+    const travel = toEdge + len + 1;
+    const [tx, ty] = at(tail);
+    const points = [[tx - back[0] * TAIL, ty - back[1] * TAIL]];
+    for (let k = len - 1; k >= 0; k--) points.push(at(p.cells[k]));
+    points.push([hx + ux * travel, hy + uy * travel]);
+    return { points: points.map((xy) => xy.join(',')).join(' '), len, head: [hx, hy], u: [ux, uy], travel };
   }
 
   function buildBoard() {
     const n = state.size;
     boardEl.style.setProperty('--n', n);
     owner = Arrows.ownerGrid(board());
+    const svg = svgEl('svg', { viewBox: `0 0 ${n} ${n}`, class: 'a-svg' });
     els = state.pieces.map((p, id) => {
-      const sq = Arrows.cells(p, n);
-      const rows = sq.map((i) => Math.floor(i / n)), cols = sq.map((i) => i % n);
-      const el = document.createElement('button');
-      el.className = 'a-piece';
-      el.dataset.id = id;
-      el.style.gridRow = `${Math.min(...rows) + 1} / span ${new Set(rows).size}`;
-      el.style.gridColumn = `${Math.min(...cols) + 1} / span ${new Set(cols).size}`;
-      el.innerHTML = arrowSvg(p.len, p.dir);
-      el.setAttribute('aria-label', `Arrow ${NAMES[p.dir]}, row ${p.r + 1}, column ${p.c + 1}`);
+      const g = geometry(p);
+      const body = Math.max(g.len - 1, 0.001);   // tube: tail centre to head centre
+      const [hx, hy] = g.head, [ux, uy] = g.u;
+      const el = svgEl('g', { class: 'a-piece', 'data-id': id, role: 'button', tabindex: 0 });
+      const line = (cls, dash, offset) => {
+        const pl = svgEl('polyline', { class: cls, points: g.points, 'stroke-dasharray': `${dash} 9999` });
+        pl.dataset.offset = offset;
+        pl.style.strokeDashoffset = offset;
+        return pl;
+      };
+      const pt = (along, side) => `${hx + ux * along - uy * side},${hy + uy * along + ux * side}`;
+      const head = svgEl('polygon', { class: 'a-head', points: `${pt(0.36, 0)} ${pt(-0.08, 0.27)} ${pt(-0.08, -0.27)}` });
+      el.append(
+        line('a-halo', body, -TAIL),
+        line('a-tube', body, -TAIL),
+        line('a-shaft', g.len - 1 + TAIL - 0.05, 0),
+        head,
+      );
+      el.dataset.travel = g.travel;
+      const r = Math.floor(p.cells[0] / n) + 1, c = p.cells[0] % n + 1;
+      const turns = Arrows.bends(p, n);
+      el.setAttribute('aria-label', `Arrow ${NAMES[p.dir]}, head at row ${r}, column ${c}` +
+        (turns ? `, ${turns} bend${turns > 1 ? 's' : ''}` : ''));
+      svg.appendChild(el);
       return el;
     });
-    boardEl.replaceChildren(...els);
+    boardEl.replaceChildren(svg);
     hinted = -1;
   }
 
+  // Put a piece back where it started (no animation: transitions only run while leaving).
+  function place(el, gone) {
+    el.classList.remove('leaving', 'hint');
+    el.classList.toggle('gone', gone);
+    for (const pl of el.querySelectorAll('polyline')) pl.style.strokeDashoffset = pl.dataset.offset;
+    el.querySelector('.a-head').style.transform = '';
+  }
+
   function render() {
-    els.forEach((el, id) => {
-      el.hidden = state.removed[id];
-      el.classList.remove('leaving', 'hint');
-      el.style.transform = '';
-    });
+    els.forEach((el, id) => place(el, state.removed[id]));
     mistakesEl.textContent = `Mistakes: ${state.mistakes}`;
     boardEl.classList.toggle('solved', state.finished);
     timer.show();
@@ -171,22 +216,23 @@
 
   const inProgress = () => !state.finished && (state.order.length > 0 || state.mistakes > 0);
 
-  // Slide a piece off the board in the direction it points.
+  // Slide a piece off the board: head first, along its own path.
   function slideOut(id) {
-    const el = els[id], p = state.pieces[id], n = state.size;
-    if (reducedMotion.matches) { el.hidden = true; return; }
-    // Far enough that the whole piece leaves the board, which clips it.
-    const step = boardEl.clientWidth / n;
-    const dist = (p.dir === 0 ? p.r + 1 : p.dir === 1 ? n - p.c : p.dir === 2 ? n - p.r : p.c + 1) + p.len;
+    const el = els[id], p = state.pieces[id];
+    if (reducedMotion.matches) { el.classList.add('gone'); return; }
+    const travel = Number(el.dataset.travel);
     el.classList.add('leaving');
-    el.style.transform = `translate(${Arrows.DC[p.dir] * dist * step}px, ${Arrows.DR[p.dir] * dist * step}px)`;
-    setTimeout(() => { if (state.removed[id]) el.hidden = true; }, SLIDE_MS);
+    el.getBoundingClientRect();   // start the transition from where it is now
+    for (const pl of el.querySelectorAll('polyline')) pl.style.strokeDashoffset = Number(pl.dataset.offset) - travel;
+    el.querySelector('.a-head').style.transform =
+      `translate(${Arrows.DC[p.dir] * travel}px, ${Arrows.DR[p.dir] * travel}px)`;
+    setTimeout(() => { if (state.removed[id]) el.classList.add('gone'); }, SLIDE_MS);
   }
 
   // Restart an animation class on an element.
   function flash(el, cls) {
     el.classList.remove(cls);
-    void el.offsetWidth;
+    el.getBoundingClientRect();
     el.classList.add(cls);
     setTimeout(() => el.classList.remove(cls), 600);
   }
@@ -266,6 +312,10 @@
   boardEl.addEventListener('click', (e) => {
     const el = e.target.closest('.a-piece');
     if (el) tap(Number(el.dataset.id));
+  });
+  boardEl.addEventListener('keydown', (e) => {
+    const el = e.target.closest('.a-piece');
+    if (el && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); tap(Number(el.dataset.id)); }
   });
 
   function confirmNew() {
