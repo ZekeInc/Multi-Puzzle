@@ -63,8 +63,24 @@
   function readAll() {
     if (!cache) {
       try { cache = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { cache = {}; }
+      if (!cache._arrowsBend) migrateArrows(cache);
     }
     return cache;
+  }
+
+  // When Arrows pieces learned to bend, the old (straight) Hard became Easy and
+  // the old Easy and Medium went away. Runs once; the marker isn't a game key.
+  function migrateArrows(data) {
+    const moved = {};
+    for (const id of Object.keys(data)) {
+      const m = /^arrows:(\d+)-(easy|medium|hard)$/.exec(id);
+      if (!m) continue;
+      if (m[2] === 'hard') moved[`arrows:${m[1]}-easy`] = data[id];
+      delete data[id];
+    }
+    Object.assign(data, moved);
+    data._arrowsBend = 1;
+    try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) { /* ignore */ }
   }
 
   function writeAll(data) {

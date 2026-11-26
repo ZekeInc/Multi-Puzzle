@@ -103,25 +103,34 @@ with `require()` for testing.
 
 ## Arrows game notes
 
-- The board is an N×N grid (5–10) completely filled with straight pieces of 1–3 squares. A piece is
-  `{ r, c, len, dir }`: (r, c) is the head (arrow-head square), `dir` 0 up / 1 right / 2 down / 3 left,
-  the rest of the piece trails behind. Tapping a piece slides it off the board if every square from its
-  head to the edge is empty; otherwise it shakes, the first piece in the way flashes (`.blocking`) and it
-  counts as a mistake (shown, but doesn't stop a best time).
+- The board is an N×N grid (5–10) completely filled with arrow pieces. A piece is `{ cells, dir }`:
+  `cells` is its path of squares, head first, and `dir` (0 up / 1 right / 2 down / 3 left) is the way the
+  head points, straight on from the square behind it. Levels differ in piece shape (`SHAPES` in
+  `arrows.js`): **Easy** straight, 1–3 squares; **Medium** up to 1 bend, 1–4 squares; **Hard** up to 3 bends,
+  1–6 squares. (Easy is what used to be Hard, from before pieces could bend.)
+- Tapping a piece slides it off head first along its own path, like a snake, if every square straight ahead
+  of its head up to the edge is empty; otherwise it shakes, the first piece in the way flashes (`.blocking`)
+  and it counts as a mistake (shown, but doesn't stop a best time).
 - Removing a piece only frees squares, so the order never matters: a board is solvable exactly when no
   pieces block each other in a loop. `Arrows.solve` / `Arrows.free` / `Arrows.blocker` need no search.
-- `Arrows.generate(n, level)` tiles the grid (`tile()`, mostly 2–3-square pieces), then plays forwards:
-  again and again it lifts off a shape that has a clear way out and points it that way, so every board is
-  solvable. `greed` = how often it takes the longest clear path (harder). Deals 12 (1 s budget, at least 3)
-  with greed spread 0–1, grades each (`grade()`: `layers` = longest must-go-first chain, `tight` = how few
-  pieces are free each step; score = layers + 10 × tight) and takes the easiest / middle / hardest.
+- `Arrows.generate(n, level)` tiles the grid (`tile()` grows random paths within the level's bend limit),
+  then plays forwards: again and again it lifts off a shape that has a clear way out, with either end as
+  the head, so every board is solvable. With bends this can rarely get stuck, and that deal is thrown away.
+  `greed` = how often it takes the longest clear path (harder). Deals 12 (1 s budget, at least 3) with
+  greed spread 0–1, grades each (`grade()`: `layers` = longest must-go-first chain, `tight` = how few
+  pieces are free each step; score = layers + 10 × tight) and keeps the hardest.
 - Preferences (⚙ `#a-prefs-modal`, same behaviour as Groups): **Difficulty** then **Grid size**.
-  Saved game holds the pieces and `order` (pieces removed so far; Undo pops it).
-- Each piece is a `<button class="a-piece">` placed on the CSS grid by row/column span, with an SVG arrow
-  in cell units. The slide-out is a CSS transform (the board clips it); with `prefers-reduced-motion`
-  the piece just disappears and nothing shakes. Hint gives a free piece the `--halo` glow and makes the
-  game assisted.
+  Saved game holds the pieces and `order` (pieces removed so far; Undo pops it). Saves from before bends
+  (`{ r, c, len, dir }` pieces) load via `Arrows.fromStraight` if they were Hard (now Easy); old Easy and
+  Medium games are dropped.
+- The board is one SVG in square units. Each piece is a `<g class="a-piece" role="button">` with a thick
+  rounded tube, a thin shaft and a head, all drawn along one line from behind the tail, through the piece
+  and off the board; dashes show the piece's part of it. Sliding out moves the dash offset and the head by
+  the same distance (`.leaving` transitions). With `prefers-reduced-motion` the piece just disappears and
+  nothing shakes. Hint lights a free piece's `.a-halo` with `--halo` and makes the game assisted.
 - Best-time keys: `size-level` (e.g. `7-hard`), labelled like Groups (`sizeLevelLabel` in `scores.js`).
+  `migrateArrows` in `scores.js` moved old Hard records to Easy once and dropped old Easy / Medium
+  (marker `_arrowsBend` in the stored data).
 
 ## Testing
 

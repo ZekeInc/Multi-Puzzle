@@ -1,16 +1,19 @@
-// Logic for "Arrows" mode: an N×N grid filled with straight arrow pieces.
-// Tapping a piece slides it off the board in the direction it points, but only
-// if every square from its head to the edge is empty. Clear the whole board.
+// Logic for "Arrows" mode: an N×N grid filled with arrow pieces.
+// Tapping a piece slides it off the board, head first, following its own path
+// like a snake, but only if every square straight ahead of its head, up to the
+// edge, is empty. Clear the whole board.
 //
-// A piece is { r, c, len, dir }: (r, c) is its head (the square with the arrow
-// head), dir is 0 up / 1 right / 2 down / 3 left, and the other len - 1 squares
-// trail behind the head (opposite to dir).
+// A piece is { cells, dir }: cells is its path of squares, head first (each
+// square next to the one before), and dir is the way the head points:
+// 0 up / 1 right / 2 down / 3 left. For a piece of 2+ squares the head points
+// straight on from the square behind it. Pieces can bend (Medium: up to 1 bend,
+// Hard: up to 3); Easy pieces are straight.
 //
 // A board is { size, pieces }. Removing a piece only ever frees squares, so a
 // board can be cleared exactly when no pieces block each other in a loop, and
 // then taking off any free piece, again and again, always clears it.
 //
-// generate(n, level) takes level 'easy' | 'medium' | 'hard' (see grade()).
+// generate(n, level) takes level 'easy' | 'medium' | 'hard'.
 
 (function (root) {
   'use strict';
@@ -18,6 +21,14 @@
   const DR = [-1, 0, 1, 0];
   const DC = [0, 1, 0, -1];
   const LEVELS = ['easy', 'medium', 'hard'];
+
+  // Per level: most bends in one piece, how likely each length is (weights for
+  // lengths 1, 2, 3, ...), and how often a piece turns while it grows when it may.
+  const SHAPES = {
+    easy: { bends: 0, weights: [1, 4, 4], turn: 0 },
+    medium: { bends: 1, weights: [1, 3, 4, 4], turn: 0.7 },
+    hard: { bends: 3, weights: [1, 2, 3, 3, 3, 3], turn: 0.8 },
+  };
 
   function randInt(n) {
     return Math.floor(Math.random() * n);
@@ -31,26 +42,40 @@
     return arr;
   }
 
-  // Squares of a piece, head first.
-  function cells(p, n) {
-    const out = [];
-    for (let k = 0; k < p.len; k++) out.push((p.r - DR[p.dir] * k) * n + (p.c - DC[p.dir] * k));
-    return out;
+  // Direction of the step from square a to its neighbour b.
+  function stepDir(a, b, n) {
+    const d = b - a;
+    return d === -n ? 0 : d === 1 ? 1 : d === n ? 2 : 3;
+  }
+
+  // Number of bends along a piece's path.
+  function bends(p, n) {
+    let count = 0;
+    for (let k = 2; k < p.cells.length; k++) {
+      if (stepDir(p.cells[k], p.cells[k - 1], n) !== stepDir(p.cells[k - 1], p.cells[k - 2], n)) count++;
+    }
+    return count;
+  }
+
+  // A piece from before pieces could bend: { r, c, len, dir } (head at r, c).
+  function fromStraight(p, n) {
+    const cells = [];
+    for (let k = 0; k < p.len; k++) cells.push((p.r - DR[p.dir] * k) * n + (p.c - DC[p.dir] * k));
+    return { cells, dir: p.dir };
   }
 
   // owner[square] = piece index, or -1 for an empty square.
   function ownerGrid(board) {
-    const n = board.size;
-    const owner = new Int16Array(n * n).fill(-1);
-    board.pieces.forEach((p, id) => { for (const i of cells(p, n)) owner[i] = id; });
+    const owner = new Int16Array(board.size * board.size).fill(-1);
+    board.pieces.forEach((p, id) => { for (const i of p.cells) owner[i] = id; });
     return owner;
   }
 
   // First piece in the way of piece `id` (nearest its head), or -1 if its path
   // to the edge is clear. `removed[id]` marks pieces already off the board.
   function blocker(board, owner, removed, id) {
-    const n = board.size, p = board.pieces[id];
-    let r = p.r + DR[p.dir], c = p.c + DC[p.dir];
+    const n = board.size, p = board.pieces[id], head = p.cells[0];
+    let r = Math.floor(head / n) + DR[p.dir], c = head % n + DC[p.dir];
     while (r >= 0 && r < n && c >= 0 && c < n) {
       const o = owner[r * n + c];
       if (o >= 0 && !removed[o]) return o;
@@ -88,84 +113,104 @@
 
   // ---------- Generator ----------
 
-  // Split the grid into straight pieces of 1–3 squares (mostly 2 and 3).
-  // Returns a list of square lists, each running left→right or top→bottom.
-  function tile(n) {
+  function pickLength(weights) {
+    let total = 0;
+    for (const w of weights) total += w;
+    let x = Math.random() * total;
+    for (let k = 0; k < weights.length; k++) {
+      x -= weights[k];
+      if (x < 0) return k + 1;
+    }
+    return weights.length;
+  }
+
+  // Split the grid into pieces: paths of squares that grow from a random
+  // starting square, at either end, up to a random length and at most
+  // `maxBends` bends. Returns a list of paths (end to end).
+  function tile(n, shape) {
     const taken = new Uint8Array(n * n);
-    const shapes = [];
-    const weight = [0, 1, 4, 4];   // by length: few single squares
-    for (const i of shuffle([...Array(n * n).keys()])) {
-      if (taken[i]) continue;
-      const r = Math.floor(i / n), c = i % n;
-      // Every placement of length 1–3 that covers square i and only free squares.
-      const options = [];
-      for (let len = 1; len <= 3; len++) {
-        for (const [dr, dc] of len === 1 ? [[0, 1]] : [[0, 1], [1, 0]]) {
-          for (let back = 0; back < len; back++) {
-            const r0 = r - dr * back, c0 = c - dc * back;
-            const sq = [];
-            for (let k = 0; k < len; k++) {
-              const rr = r0 + dr * k, cc = c0 + dc * k;
-              if (rr < 0 || rr >= n || cc < 0 || cc >= n || taken[rr * n + cc]) break;
-              sq.push(rr * n + cc);
-            }
-            if (sq.length === len) options.push(sq);
+    const paths = [];
+    const neighbours = (i) => {
+      const r = Math.floor(i / n), c = i % n, out = [];
+      if (r > 0) out.push(i - n);
+      if (c < n - 1) out.push(i + 1);
+      if (r < n - 1) out.push(i + n);
+      if (c > 0) out.push(i - 1);
+      return out;
+    };
+    for (const start of shuffle([...Array(n * n).keys()])) {
+      if (taken[start]) continue;
+      const want = pickLength(shape.weights);
+      const path = [start];
+      taken[start] = 1;
+      let turns = 0;
+      while (path.length < want) {
+        const options = [];   // [atEnd, square, bends]
+        for (const atEnd of [false, true]) {
+          const end = atEnd ? path[path.length - 1] : path[0];
+          const prev = path.length > 1 ? (atEnd ? path[path.length - 2] : path[1]) : -1;
+          for (const next of neighbours(end)) {
+            if (taken[next]) continue;
+            const turn = prev >= 0 && stepDir(prev, end, n) !== stepDir(end, next, n) ? 1 : 0;
+            if (turns + turn <= shape.bends) options.push([atEnd, next, turn]);
           }
         }
+        if (!options.length) break;
+        // Where a bend is allowed, take one `shape.turn` of the time.
+        const turning = options.filter((o) => o[2]), straight = options.filter((o) => !o[2]);
+        const pool = turning.length && (!straight.length || Math.random() < shape.turn) ? turning : straight;
+        const [atEnd, next, turn] = pool[randInt(pool.length)];
+        if (atEnd) path.push(next); else path.unshift(next);
+        taken[next] = 1;
+        turns += turn;
       }
-      let total = 0;
-      for (const sq of options) total += weight[sq.length];
-      let pick = Math.random() * total, chosen = options[0];
-      for (const sq of options) {
-        pick -= weight[sq.length];
-        if (pick < 0) { chosen = sq; break; }
-      }
-      for (const j of chosen) taken[j] = 1;
-      shapes.push(chosen);
+      paths.push(path);
     }
-    return shapes;
+    return paths;
   }
 
-  // The piece a shape becomes when it points in `dir`.
-  function orient(shape, dir, n) {
-    const head = dir === 0 || dir === 3 ? shape[0] : shape[shape.length - 1];
-    return { r: Math.floor(head / n), c: head % n, len: shape.length, dir };
+  // The ways a path can become a piece: either end can be the head, pointing
+  // straight on (a single square can point any way).
+  function orientations(path, n) {
+    if (path.length === 1) return [0, 1, 2, 3].map((dir) => ({ cells: path.slice(), dir }));
+    const fwd = path.slice().reverse();   // head = last square of path
+    return [
+      { cells: fwd, dir: stepDir(fwd[1], fwd[0], n) },
+      { cells: path.slice(), dir: stepDir(path[1], path[0], n) },
+    ];
   }
 
-  // Directions a shape can point: along its length (any of 4 for one square).
-  function dirsFor(shape, n) {
-    if (shape.length === 1) return [0, 1, 2, 3];
-    return shape[1] - shape[0] === 1 ? [1, 3] : [0, 2];
-  }
-
-  // One full board. Plays the game forwards on the bare tiling: again and again,
-  // take a shape that has some clear way out, point it that way and lift it off.
-  // That always finishes (the top-left-most remaining square always has a way out)
-  // and every piece's path then crosses only pieces that went before it, so the
-  // board is solvable. `greed` (0–1) is how often the shape with the longest
-  // clear path is taken instead of a random one; long paths over pieces that
-  // went first make more pieces wait on others.
-  function generateOne(n, greed) {
-    const shapes = tile(n);
+  // One full board, or null if it got stuck. Plays the game forwards on the
+  // bare tiling: again and again, take a shape that has some clear way out,
+  // point it that way and lift it off. Every piece's path then crosses only
+  // pieces that went before it, so the board is solvable. (Straight pieces
+  // never get stuck; bent ones rarely can, and then the deal is thrown away.)
+  // `greed` (0–1) is how often the shape with the longest clear path is taken
+  // instead of a random one; long paths over pieces that went first make more
+  // pieces wait on others.
+  function generateOne(n, level, greed) {
+    const paths = tile(n, SHAPES[level] || SHAPES.easy);
     const owner = new Int16Array(n * n).fill(-1);
-    shapes.forEach((sq, id) => { for (const i of sq) owner[i] = id; });
-    const off = new Array(shapes.length).fill(false);
-    const pieces = new Array(shapes.length);
-    for (let left = shapes.length; left; left--) {
-      const moves = [];   // [id, dir, path length]
-      shapes.forEach((sq, id) => {
+    paths.forEach((sq, id) => { for (const i of sq) owner[i] = id; });
+    const off = new Array(paths.length).fill(false);
+    const pieces = new Array(paths.length);
+    const options = paths.map((sq) => orientations(sq, n));
+    for (let left = paths.length; left; left--) {
+      const moves = [];   // [id, piece, path length]
+      options.forEach((opts, id) => {
         if (off[id]) return;
-        for (const dir of dirsFor(sq, n)) {
-          const p = orient(sq, dir, n);
-          let r = p.r + DR[dir], c = p.c + DC[dir], len = 0, clear = true;
+        for (const p of opts) {
+          const head = p.cells[0];
+          let r = Math.floor(head / n) + DR[p.dir], c = head % n + DC[p.dir], len = 0, clear = true;
           while (r >= 0 && r < n && c >= 0 && c < n) {
             const o = owner[r * n + c];
             if (o >= 0 && !off[o]) { clear = false; break; }
-            r += DR[dir]; c += DC[dir]; len++;
+            r += DR[p.dir]; c += DC[p.dir]; len++;
           }
-          if (clear) moves.push([id, dir, len]);
+          if (clear) moves.push([id, p, len]);
         }
       });
+      if (!moves.length) return null;
       let m;
       if (Math.random() < greed) {
         const best = Math.max(...moves.map((x) => x[2]));
@@ -174,7 +219,7 @@
       } else {
         m = moves[randInt(moves.length)];
       }
-      pieces[m[0]] = orient(shapes[m[0]], m[1], n);
+      pieces[m[0]] = m[1];
       off[m[0]] = true;
     }
     return { size: n, pieces };
@@ -187,7 +232,6 @@
   function grade(board) {
     const owner = ownerGrid(board);
     const total = board.pieces.length;
-    // Rounds of removing everything free at once.
     let layers = 0;
     {
       const off = new Array(total).fill(false);
@@ -199,7 +243,6 @@
         layers++;
       }
     }
-    // One at a time: share of the remaining pieces that are free.
     let sum = 0;
     const off = new Array(total).fill(false);
     for (let left = total; left; left--) {
@@ -211,26 +254,30 @@
     return { layers, tight, score: layers + 10 * tight };
   }
 
-  // Deal up to 12 boards (1 s budget, at least 3) with a spread of greed,
-  // rank them by grade score and take the easiest, the middle one or the hardest.
+  // Deal up to 12 boards (1 s budget, at least 3) with a spread of greed and
+  // keep the hardest. The levels differ in the shapes of the pieces: straight
+  // (Easy), up to 1 bend (Medium), up to 3 bends (Hard).
   const POOL = 12, BUDGET_MS = 1000;
 
   function generate(n, level) {
     if (!LEVELS.includes(level)) level = 'medium';
     const deadline = Date.now() + BUDGET_MS;
     const pool = [];
-    while (pool.length < POOL && (pool.length < 3 || Date.now() < deadline)) {
-      const greed = pool.length / (POOL - 1);
-      const b = generateOne(n, greed);
+    for (let tries = 0; pool.length < POOL && (pool.length < 3 || Date.now() < deadline) && tries < 200; tries++) {
+      const b = generateOne(n, level, pool.length / (POOL - 1));
+      if (!b) continue;
       b.grade = grade(b);
       pool.push(b);
     }
-    const ranked = pool.sort((a, b) => a.grade.score - b.grade.score);
-    const pick = level === 'easy' ? 0 : level === 'hard' ? ranked.length - 1 : (ranked.length - 1) >> 1;
-    return Object.assign(ranked[pick], { level });
+    if (!pool.length) throw new Error('Could not generate a puzzle');
+    pool.sort((a, b) => a.grade.score - b.grade.score);
+    return Object.assign(pool[pool.length - 1], { level });
   }
 
-  const api = { generate, generateOne, grade, solve, free, blocker, ownerGrid, cells, DR, DC, LEVELS };
+  const api = {
+    generate, generateOne, grade, solve, free, blocker, ownerGrid, bends, stepDir, fromStraight,
+    DR, DC, LEVELS, SHAPES,
+  };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Arrows = api;
 })(this);
