@@ -35,8 +35,10 @@ with `require()` for testing.
   `GameMode.timer(mode, el, canRun, save)` (`start`, `pause`, `reset(ms)`, `ms()`, `show()`), which
   pauses and saves when the game's tab is hidden or the app goes to the background; one shared
   tick redraws only the showing timer.
-- **Pop-ups** use `GameMode.popup(modal, openButton, focusEl, dismiss)`: Escape and tapping outside
-  call `dismiss` (default: close), and closing refocuses the opening button.
+- **Pop-ups** use `GameMode.popup(modal, openButton, focusEl, dismiss)`: Escape, tapping outside and the
+  phone's back button (Android) call `dismiss` (default: close), and closing refocuses the opening button.
+  Opening pushes a history entry that back pops (`popstate`); closing any other way calls `history.back()`
+  to take it off again, so back with nothing open still leaves the app.
 - **Speed:** on first launch Groups, Sort and Arrows only make a puzzle when their tab is first opened
   (`GameMode.whenShown`). Redraws skip squares whose look hasn't changed (`shown[]` in Sudoku and
   Groups); Sort only re-measures its layout when the box count or size changes (resizes go through
