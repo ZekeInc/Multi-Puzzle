@@ -18,6 +18,7 @@ Installable as a home-screen app and works offline.
 | `groups.js` / `groups-app.js` | Groups logic (unique-solution generator, difficulty grader) / Groups UI |
 | `sort.js` / `sort-app.js` | Sort logic (rules, solver, solvable generator) / Sort UI |
 | `sw.js` | Service worker: offline cache, network-first (falls back to the cached copy if the network takes over 3 s) |
+| `TODO.md` | Planned work (next: the Arrows game, with its rules, solver and generator design) |
 | `manifest.webmanifest`, `icons/` | Home-screen install. `icon.svg` is the source; PNGs are rendered from it (`icon-maskable-512.png` has the art scaled to 88% for Android masks) |
 
 Logic files (`sudoku.js`, `groups.js`, `sort.js`) have no DOM code and can be loaded in Node
