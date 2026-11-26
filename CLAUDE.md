@@ -1,6 +1,6 @@
 # Multi Puzzle
 
-Mobile-first puzzle web app with three games: **Sudoku**, **Groups** and **Sort**.
+Mobile-first puzzle web app with four games: **Sudoku**, **Groups**, **Sort** and **Arrows**.
 Plain HTML/CSS/JavaScript, no dependencies and no build step. Hosted on GitHub Pages at
 https://zekeinc.github.io/Multi-Puzzle/ (updates 1–2 minutes after a merge to `main`).
 Installable as a home-screen app and works offline.
@@ -9,19 +9,20 @@ Installable as a home-screen app and works offline.
 
 | File | Purpose |
 |---|---|
-| `index.html` | All markup: tab bar, one `<section class="view">` per game, pop-ups (rules, best times, Groups and Sort preferences) |
+| `index.html` | All markup: tab bar, one `<section class="view">` per game, pop-ups (rules, best times, Groups, Sort and Arrows preferences) |
 | `style.css` | All styles. Theme colours are CSS variables on `:root` (light) and `:root[data-theme="dark"]` |
 | `theme.js` | Light/dark toggle. Dark is the default; an inline script in `<head>` applies the saved theme before the page draws |
-| `modes.js` | Tab switching (fires `modechange`; `GameMode.isActive('sudoku' \| 'groups' \| 'sort')`) and the pieces the games share: `GameMode.timer`, `popup`, `message`, `buzz`, `formatTime`, `whenShown` |
+| `modes.js` | Tab switching (fires `modechange`; `GameMode.isActive('sudoku' \| 'groups' \| 'sort' \| 'arrows')`) and the pieces the games share: `GameMode.timer`, `popup`, `message`, `buzz`, `formatTime`, `whenShown` |
 | `scores.js` | Best times per game and difficulty/size, plus the 🏆 Best times pop-up (`Scores.record`, `Scores.bestLabel`, `Scores.verdict` = end of the win message). Kept in memory after the first read |
 | `sudoku.js` / `app.js` | Sudoku logic (generator, solver) / Sudoku UI |
 | `groups.js` / `groups-app.js` | Groups logic (unique-solution generator, difficulty grader) / Groups UI |
 | `sort.js` / `sort-app.js` | Sort logic (rules, solver, solvable generator) / Sort UI |
+| `arrows.js` / `arrows-app.js` | Arrows logic (blocking check, solver, solvable generator, grader) / Arrows UI |
 | `sw.js` | Service worker: offline cache, network-first (falls back to the cached copy if the network takes over 3 s) |
-| `TODO.md` | Planned work (next: the Arrows game, with its rules, solver and generator design) |
+| `TODO.md` | Planned work and ideas for later |
 | `manifest.webmanifest`, `icons/` | Home-screen install. `icon.svg` is the source; PNGs are rendered from it (`icon-maskable-512.png` has the art scaled to 88% for Android masks) |
 
-Logic files (`sudoku.js`, `groups.js`, `sort.js`) have no DOM code and can be loaded in Node
+Logic files (`sudoku.js`, `groups.js`, `sort.js`, `arrows.js`) have no DOM code and can be loaded in Node
 with `require()` for testing.
 
 ## Conventions
@@ -30,20 +31,21 @@ with `require()` for testing.
   bump `CACHE` in `sw.js`, so installed copies pick up the change. If you add a file, add it to
   the `FILES` list in `sw.js` too.
 - **Each game** keeps its own state and saved progress in `localStorage`
-  (`sudoku-save-v1`, `groups-save-v1`, `sort-save-v1`). Its timer comes from
+  (`sudoku-save-v1`, `groups-save-v1`, `sort-save-v1`, `arrows-save-v1`). Its timer comes from
   `GameMode.timer(mode, el, canRun, save)` (`start`, `pause`, `reset(ms)`, `ms()`, `show()`), which
   pauses and saves when the game's tab is hidden or the app goes to the background; one shared
   tick redraws only the showing timer.
 - **Pop-ups** use `GameMode.popup(modal, openButton, focusEl, dismiss)`: Escape and tapping outside
   call `dismiss` (default: close), and closing refocuses the opening button.
-- **Speed:** on first launch Groups and Sort only make a puzzle when their tab is first opened
+- **Speed:** on first launch Groups, Sort and Arrows only make a puzzle when their tab is first opened
   (`GameMode.whenShown`). Redraws skip squares whose look hasn't changed (`shown[]` in Sudoku and
   Groups); Sort only re-measures its layout when the box count or size changes (resizes go through
   a `ResizeObserver`). The solvers keep one working array and undo on backtrack instead of copying.
 - **Hints / Solve** mark a game as assisted, so it can't set a best time.
 - **Themes:** check UI changes in both dark and light. Don't use `prefers-color-scheme`; the
   theme comes from `data-theme` on `<html>`.
-- **Layout:** must fit phones down to 320px wide with no scrolling, and landscape phones
+- **Layout:** must fit phones down to 320px wide with no scrolling (four tabs: smaller labels and icon
+  buttons under 400px / 340px wide, and on landscape phones under 640px wide), and landscape phones
   (under `@media (orientation: landscape) and (max-height: 600px)`: `.view` is `display: contents` and `main`
   is a 5-column grid; top line = tab bar left + the game's `.top-controls` right; board centred; actions
   split 2 | 2 either side, status top-left, message above the right pair; Sudoku's numpad is 3 × 3 on the right).
@@ -98,6 +100,28 @@ with `require()` for testing.
   Keep every colour light enough for dark numbers (contrast with `#1d2330` of at least 4:1).
 - Selecting a box changes nothing on the box itself: the blocks that would move (its top run of one colour, `Sort.topRun`) get a halo (`.square.lifted`, `--halo`). Nothing moves. A completed box (all blocks of one colour) closes
   its top. Boxes are sized to the available space in 1–3 rows by `layout()`.
+
+## Arrows game notes
+
+- The board is an N×N grid (5–10) completely filled with straight pieces of 1–3 squares. A piece is
+  `{ r, c, len, dir }`: (r, c) is the head (arrow-head square), `dir` 0 up / 1 right / 2 down / 3 left,
+  the rest of the piece trails behind. Tapping a piece slides it off the board if every square from its
+  head to the edge is empty; otherwise it shakes, the first piece in the way flashes (`.blocking`) and it
+  counts as a mistake (shown, but doesn't stop a best time).
+- Removing a piece only frees squares, so the order never matters: a board is solvable exactly when no
+  pieces block each other in a loop. `Arrows.solve` / `Arrows.free` / `Arrows.blocker` need no search.
+- `Arrows.generate(n, level)` tiles the grid (`tile()`, mostly 2–3-square pieces), then plays forwards:
+  again and again it lifts off a shape that has a clear way out and points it that way, so every board is
+  solvable. `greed` = how often it takes the longest clear path (harder). Deals 12 (1 s budget, at least 3)
+  with greed spread 0–1, grades each (`grade()`: `layers` = longest must-go-first chain, `tight` = how few
+  pieces are free each step; score = layers + 10 × tight) and takes the easiest / middle / hardest.
+- Preferences (⚙ `#a-prefs-modal`, same behaviour as Groups): **Difficulty** then **Grid size**.
+  Saved game holds the pieces and `order` (pieces removed so far; Undo pops it).
+- Each piece is a `<button class="a-piece">` placed on the CSS grid by row/column span, with an SVG arrow
+  in cell units. The slide-out is a CSS transform (the board clips it); with `prefers-reduced-motion`
+  the piece just disappears and nothing shakes. Hint gives a free piece the `--halo` glow and makes the
+  game assisted.
+- Best-time keys: `size-level` (e.g. `7-hard`), labelled like Groups (`sizeLevelLabel` in `scores.js`).
 
 ## Testing
 

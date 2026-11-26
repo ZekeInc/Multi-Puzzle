@@ -1,10 +1,10 @@
-// Switches between game modes (Sudoku / Groups / Sort) and remembers the last one,
-// and holds the pieces the three games share: timers, pop-ups and messages.
+// Switches between game modes (Sudoku / Groups / Sort / Arrows) and remembers the last one,
+// and holds the pieces the games share: timers, pop-ups and messages.
 (function () {
   'use strict';
 
   const KEY = 'game-mode';
-  const MODES = ['sudoku', 'groups', 'sort'];
+  const MODES = ['sudoku', 'groups', 'sort', 'arrows'];
   const isActive = (mode) => document.body.dataset.mode === mode;
 
   function setMode(mode, announce) {

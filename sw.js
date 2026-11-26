@@ -1,6 +1,6 @@
 // Service worker: caches the app so it works offline once installed.
 // Bump CACHE when files change so phones pick up the new version.
-const CACHE = 'multi-puzzle-v30';
+const CACHE = 'multi-puzzle-v31';
 const FILES = [
   './',
   'index.html',
@@ -14,6 +14,8 @@ const FILES = [
   'groups-app.js',
   'sort.js',
   'sort-app.js',
+  'arrows.js',
+  'arrows-app.js',
   'manifest.webmanifest',
   'icons/icon.svg',
   'icons/icon-192.png',
