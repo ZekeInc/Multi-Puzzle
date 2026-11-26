@@ -49,6 +49,9 @@ with `require()` for testing.
   Respect `prefers-reduced-motion` for animations.
   `main` is exactly the visible height: `--app-h`, set from `visualViewport` in `modes.js`
   (`100dvh` can disagree with what mobile browsers really show, e.g. Android Chrome / Samsung Internet with a sliding address bar). Size boards from `--app-h`, not `100dvh`.
+- **No zooming:** the viewport has `maximum-scale=1, user-scalable=no`, `html` has
+  `touch-action: pan-x pan-y` and `modes.js` cancels Safari's `gesturestart`. Keep `select`
+  text at 16px or more, or iOS zooms in when a menu is tapped.
 - **Confirm before losing progress:** New, Restart, Clear and Solve ask first when a game is in progress.
 
 ## Groups game notes

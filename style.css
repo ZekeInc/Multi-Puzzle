@@ -59,6 +59,9 @@
 * { box-sizing: border-box; }
 
 html, body { height: 100%; }
+/* No pinch or double-tap zoom: the app is laid out to fit the screen.
+   Scrolling inside pop-ups still works. */
+html { touch-action: pan-x pan-y; }
 
 body {
   margin: 0;
@@ -660,3 +663,7 @@ button:active { transform: scale(0.96); }
 /* Show the icon for the theme you'd switch to. */
 :root[data-theme="dark"] .icon-moon,
 :root:not([data-theme="dark"]) .icon-sun { display: none; }
+
+/* iOS zooms in on any menu with text under 16px when it is tapped, so menus
+   stay at 16px (after the rules above that set smaller sizes). */
+select, .top-controls > select, .opt-group select { font-size: 16px; }

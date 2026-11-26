@@ -56,6 +56,9 @@
   window.addEventListener('orientationchange', () => setTimeout(setAppHeight, 300));
   if (window.visualViewport) window.visualViewport.addEventListener('resize', setAppHeight);
 
+  // iOS Safari ignores user-scalable=no, so stop pinch-zoom here too.
+  document.addEventListener('gesturestart', (e) => e.preventDefault());
+
   // ---------- Shared by the games ----------
 
   function formatTime(ms) {
