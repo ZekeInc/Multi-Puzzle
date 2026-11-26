@@ -5,6 +5,16 @@
 
   const KEY = 'best-times-v1';
 
+  // Labels and order for `size-level` keys (Groups and Arrows).
+  function sizeLevelLabel(key) {
+    const [n, level = 'random'] = key.split('-');
+    return `${n} × ${n}, ${level[0].toUpperCase()}${level.slice(1)}`;
+  }
+  function sizeLevelOrder(key) {
+    const [n, level] = key.split('-');
+    return Number(n) * 10 + (level ? ['easy', 'medium', 'hard'].indexOf(level) + 1 : 0);
+  }
+
   const CATEGORIES = {
     sudoku: {
       title: 'Sudoku',
@@ -15,14 +25,8 @@
       // Played keys from storage: `size-level`, or just `size` for games from
       // before levels existed (shown as Random, like Sort).
       fromSaved: true,
-      label(key) {
-        const [n, level = 'random'] = key.split('-');
-        return `${n} × ${n}, ${level[0].toUpperCase()}${level.slice(1)}`;
-      },
-      order(key) {
-        const [n, level] = key.split('-');
-        return Number(n) * 10 + (level ? ['easy', 'medium', 'hard'].indexOf(level) + 1 : 0);
-      },
+      label: sizeLevelLabel,
+      order: sizeLevelOrder,
     },
     sort: {
       title: 'Sort',
@@ -44,6 +48,12 @@
         text += `, ${level[0].toUpperCase()}${level.slice(1)}`;
         return text;
       },
+    },
+    arrows: {
+      title: 'Arrows',
+      fromSaved: true,   // keys `size-level`, like Groups
+      label: sizeLevelLabel,
+      order: sizeLevelOrder,
     },
   };
 

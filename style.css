@@ -28,6 +28,10 @@
   --g5: #a5c4f2; --g6: #c6b0ef; --g7: #f2b5dc; --g8: #d9c3a3; --g9: #c3cad6;
   --g-mark: #1d2330;
   --g-edge: #1d2330;
+
+  /* Arrows mode */
+  --a-tile: #e4e9f2;
+  --a-ink: #1d2330;
 }
 
 /* Dark theme (the default; set on <html data-theme="dark"> before the page draws). */
@@ -54,6 +58,9 @@
     --g5: #46679c; --g6: #6a5498; --g7: #964d81; --g8: #a3906f; --g9: #5d6574;
     --g-mark: #f4f6fa;
     --g-edge: #0b0d12;
+
+    --a-tile: #2b3344;
+    --a-ink: #e6e9ef;
 }
 
 * { box-sizing: border-box; }
@@ -107,7 +114,7 @@ main {
   gap: 8px;
   align-items: stretch;
 }
-.topbar .tabs { flex: 1; }
+.topbar .tabs { flex: 1; min-width: 0; }
 .icon-btn {
   width: 44px;
   flex: 0 0 auto;
@@ -130,7 +137,7 @@ main {
 
 .tabs {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   padding: 3px;
   gap: 3px;
   border-radius: 12px;
@@ -138,11 +145,23 @@ main {
 }
 .tabs button {
   min-height: 36px;
+  min-width: 0;
+  padding: 0 2px;
   border: none;
   border-radius: 9px;
   background: transparent;
   color: var(--muted);
   font-weight: 600;
+}
+/* Four tabs on narrow phones: smaller labels and icon buttons so they all fit. */
+@media (max-width: 400px) {
+  .tabs button { font-size: 0.85rem; }
+  .icon-btn { width: 38px; }
+}
+@media (max-width: 340px) {
+  .tabs button { font-size: 0.78rem; letter-spacing: -0.01em; }
+  .topbar { gap: 6px; }
+  .icon-btn { width: 34px; }
 }
 .tabs button[aria-selected="true"] {
   background: var(--surface);
@@ -258,9 +277,9 @@ button:active { transform: scale(0.96); }
 }
 .message.win { color: var(--accent); }
 .message.bad { color: var(--error); }
-/* Sort: always keep room for two lines of message, so text appearing (a hint,
+/* Sort and Arrows: always keep room for two lines of message, so text appearing (a hint,
    a win) doesn't resize the boxes. */
-#s-message { line-height: 1.3; min-height: 2.6em; }
+#s-message, #a-message { line-height: 1.3; min-height: 2.6em; }
 
 .actions {
   display: grid;
@@ -349,7 +368,7 @@ button:active { transform: scale(0.96); }
 
   /* Board in the middle column, as tall as the space under the top line. */
   .board-wrap { grid-row: 2 / -1; grid-column: 3; margin: 0 8px; }
-  #board, #g-board {   /* ids, so this beats the .g-board rule further down */
+  #board, #g-board, #a-board {   /* ids, so these beat the board rules further down */
     min-width: 0;
     width: calc(var(--app-h, 100dvh) - 66px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
   }
@@ -388,6 +407,14 @@ button:active { transform: scale(0.96); }
   #sort-view .board-wrap { min-width: 0; min-height: 0; }
   /* The message wraps inside its column instead of widening it. */
   #s-message { width: 0; min-width: 100%; }
+}
+/* Small landscape phones (e.g. iPhone SE): give the four tabs a bit more of the top line. */
+@media (orientation: landscape) and (max-height: 600px) and (max-width: 640px) {
+  main { --top-w: 49%; }
+  .tabs { grid-template-columns: repeat(4, auto); }   /* "Sort" needs less room than "Sudoku" */
+  .tabs button { font-size: 0.75rem; letter-spacing: -0.01em; }
+  .topbar { gap: 4px; }
+  .icon-btn { width: 32px; }
 }
 
 /* ===================== Groups mode ===================== */
@@ -521,6 +548,76 @@ button:active { transform: scale(0.96); }
 .g-chip.conflict::after { border-color: var(--error); }
 .g-groups.solved .g-chip.done::after { background: var(--g-mark); }
 
+/* ===================== Arrows mode ===================== */
+
+.arrows-controls { grid-template-columns: 2fr 1fr; }
+
+.a-board {
+  --n: 7;
+  display: grid;
+  grid-template-columns: repeat(var(--n), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--n), minmax(0, 1fr));
+  width: min(100%, calc(100vh - 300px));
+  width: min(100%, calc(var(--app-h, 100dvh) - 300px - env(safe-area-inset-top) - env(safe-area-inset-bottom)));
+  min-width: 260px;
+  aspect-ratio: 1;
+  padding: 2px;
+  border: 2px solid var(--line-strong);
+  border-radius: 8px;
+  overflow: hidden;   /* pieces vanish as they slide past the edge */
+  background: var(--surface);
+  container-type: inline-size;
+}
+
+/* One button per piece, spanning its squares. */
+.a-piece {
+  display: flex;
+  margin: 2px;
+  padding: 0;
+  min-width: 0;
+  min-height: 0;
+  border: none;
+  border-radius: calc(100cqi / var(--n) * 0.18);
+  background: var(--a-tile);
+  color: var(--a-ink);
+  transition: transform 0.26s ease-in, opacity 0.26s ease-in;
+}
+.a-piece:active { transform: none; }
+@media (hover: hover) { .a-piece:hover { box-shadow: inset 0 0 0 2px var(--accent); } }
+.a-piece svg {
+  width: 100%;
+  height: 100%;
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-width: 0.13;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.a-piece.leaving { opacity: 0; pointer-events: none; }
+.a-piece.hint {
+  position: relative;
+  z-index: 1;
+  box-shadow: 0 0 0 2px var(--halo), 0 0 10px 3px color-mix(in srgb, var(--halo) 65%, transparent);
+}
+/* Tapped while blocked: it shakes along its arrow and the piece in the way flashes. */
+.a-piece.shake-x { animation: shake 0.15s 2; }
+.a-piece.shake-y { animation: shake-y 0.15s 2; }
+.a-piece.blocking { animation: blocking 0.6s; }
+@keyframes shake-y {
+  0%, 100% { translate: 0; }
+  25% { translate: 0 -3px; }
+  75% { translate: 0 3px; }
+}
+@keyframes blocking {
+  0%, 100% { background: var(--a-tile); color: var(--a-ink); }
+  20%, 70% { background: var(--error-bg); color: var(--error); box-shadow: inset 0 0 0 2px var(--error); }
+}
+.a-board.solved { border-color: var(--accent); }
+@media (prefers-reduced-motion: reduce) {
+  .a-piece { transition: none; }
+  .a-piece.shake-x, .a-piece.shake-y { animation: none; }
+}
+
 /* ===================== Best times ===================== */
 
 .scores h3 { margin: 14px 0 4px; font-size: 1rem; }
@@ -577,7 +674,7 @@ button:active { transform: scale(0.96); }
   .prefs .opt-group { grid-template-columns: minmax(0, 1fr); align-content: start; margin-top: 8px; }
   .opt-group select { min-height: 40px; }
   .prefs .note { margin-top: 6px; }
-  #g-prefs-modal .prefs-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #g-prefs-modal .prefs-groups, #a-prefs-modal .prefs-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 #sort-view .board-wrap {
