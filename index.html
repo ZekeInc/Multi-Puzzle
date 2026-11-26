@@ -22,7 +22,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <link rel="stylesheet" href="style.css?v=25">
+  <link rel="stylesheet" href="style.css?v=26">
 </head>
 <body>
   <main>
@@ -385,7 +385,13 @@
   <div class="modal" id="scores-modal" hidden>
     <div class="rules scores" role="dialog" aria-modal="true" aria-labelledby="scores-title">
       <h2 id="scores-title">Best times</h2>
-      <div id="scores-body"></div>
+      <div class="tabs scores-tabs" role="tablist" aria-label="Game">
+        <button role="tab" data-game="sudoku" aria-controls="scores-body">Sudoku</button>
+        <button role="tab" data-game="groups" aria-controls="scores-body">Groups</button>
+        <button role="tab" data-game="sort" aria-controls="scores-body">Sort</button>
+        <button role="tab" data-game="arrows" aria-controls="scores-body">Arrows</button>
+      </div>
+      <div id="scores-body" role="tabpanel"></div>
       <p class="note">Games where you used Hint or Solve don't count toward best times.</p>
       <div class="modal-buttons">
         <button id="scores-reset" class="secondary">Reset</button>
@@ -395,8 +401,8 @@
   </div>
 
   <script src="theme.js?v=7"></script>
-  <script src="modes.js?v=13"></script>
-  <script src="scores.js?v=12"></script>
+  <script src="modes.js?v=14"></script>
+  <script src="scores.js?v=13"></script>
   <script src="sudoku.js?v=5"></script>
   <script src="app.js?v=5"></script>
   <script src="groups.js?v=6"></script>

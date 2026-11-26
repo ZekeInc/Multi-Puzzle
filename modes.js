@@ -99,22 +99,39 @@
 
   // Pop-up (`el` is the .modal backdrop); returns show(open). Tapping outside or
   // Escape calls `dismiss` (default: close). Closing refocuses the opening button.
+  // The phone's back button (Android) also calls `dismiss`: opening a pop-up
+  // adds a history entry, back removes it (popstate), and closing the pop-up
+  // any other way takes the entry off again, so back then leaves the app as usual.
   const popups = [];
   function popup(el, btn, focusEl, dismiss) {
+    const entry = { el, dismiss: null, inHistory: false };
     const show = (open) => {
       el.hidden = !open;
       btn.setAttribute('aria-expanded', String(open));
       (open ? focusEl : btn).focus();
+      if (open && !entry.inHistory) {
+        history.pushState({ popup: true }, '');
+        entry.inHistory = true;
+      } else if (!open && entry.inHistory) {
+        entry.inHistory = false;
+        history.back();
+      }
     };
-    dismiss = dismiss || (() => show(false));
-    el.addEventListener('click', (e) => { if (e.target === el) dismiss(); });
-    popups.push({ el, dismiss });
+    entry.dismiss = dismiss || (() => show(false));
+    el.addEventListener('click', (e) => { if (e.target === el) entry.dismiss(); });
+    popups.push(entry);
     return show;
   }
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape') return;
     const open = popups.find((p) => !p.el.hidden);
     if (open) open.dismiss();
+  });
+  window.addEventListener('popstate', () => {
+    const open = popups.find((p) => !p.el.hidden && p.inHistory);
+    if (!open) return;
+    open.inHistory = false;   // back already took its entry off
+    open.dismiss();
   });
 
   function message(el) {

@@ -130,56 +130,86 @@
   const body = document.getElementById('scores-body');
   const openBtn = document.getElementById('scores-open');
 
+  // One game at a time; the buttons at the top pick which.
+  const gameTabs = [...document.querySelectorAll('.scores-tabs [data-game]')];
+  let shownGame = 'sudoku';
+
   function renderTable() {
-    body.replaceChildren();
-    for (const [game, cat] of Object.entries(CATEGORIES)) {
-      const h = document.createElement('h3');
-      h.textContent = cat.title;
-      const table = document.createElement('table');
-      table.innerHTML = '<thead><tr><th scope="col"></th><th scope="col">Best time</th><th scope="col">Solved</th></tr></thead>';
-      const tbody = document.createElement('tbody');
-      const keys = cat.fromSaved
-        ? Object.keys(readAll())
-          .filter((id) => id.startsWith(`${game}:`))
-          .map((id) => id.slice(game.length + 1))
-          .sort(cat.order
-            ? (x, y) => cat.order(x) - cat.order(y)
-            : (x, y) => x.localeCompare(y, undefined, { numeric: true }))
-          .map((key) => [key, cat.label(key)])
-        : cat.keys;
-      for (const [key, label] of keys) {
-        const { best, solved } = get(game, key);
-        if (cat.fromSaved && !solved) continue;
-        const tr = document.createElement('tr');
-        const cells = [label, best === null ? '—' : formatTime(best), String(solved)];
-        cells.forEach((text, i) => {
-          const td = document.createElement(i === 0 ? 'th' : 'td');
-          if (i === 0) td.scope = 'row';
-          td.textContent = text;
-          tr.appendChild(td);
-        });
-        tbody.appendChild(tr);
-      }
-      table.appendChild(tbody);
-      if (!tbody.children.length) {
-        const p = document.createElement('p');
-        p.className = 'note';
-        p.textContent = 'No puzzles solved yet.';
-        body.append(h, p);
-      } else {
-        body.append(h, table);
-      }
+    const game = shownGame, cat = CATEGORIES[game];
+    gameTabs.forEach((tab) => {
+      const on = tab.dataset.game === game;
+      tab.setAttribute('aria-selected', String(on));
+      tab.tabIndex = on ? 0 : -1;
+    });
+    body.setAttribute('aria-label', `${cat.title} best times`);
+    const table = document.createElement('table');
+    table.innerHTML = '<thead><tr><th scope="col"></th><th scope="col">Best time</th><th scope="col">Solved</th></tr></thead>';
+    const tbody = document.createElement('tbody');
+    const keys = cat.fromSaved
+      ? Object.keys(readAll())
+        .filter((id) => id.startsWith(`${game}:`))
+        .map((id) => id.slice(game.length + 1))
+        .sort(cat.order
+          ? (x, y) => cat.order(x) - cat.order(y)
+          : (x, y) => x.localeCompare(y, undefined, { numeric: true }))
+        .map((key) => [key, cat.label(key)])
+      : cat.keys;
+    for (const [key, label] of keys) {
+      const { best, solved } = get(game, key);
+      if (cat.fromSaved && !solved) continue;
+      const tr = document.createElement('tr');
+      const cells = [label, best === null ? '—' : formatTime(best), String(solved)];
+      cells.forEach((text, i) => {
+        const td = document.createElement(i === 0 ? 'th' : 'td');
+        if (i === 0) td.scope = 'row';
+        td.textContent = text;
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    }
+    table.appendChild(tbody);
+    if (!tbody.children.length) {
+      const p = document.createElement('p');
+      p.className = 'note';
+      p.textContent = `No ${cat.title} puzzles solved yet.`;
+      body.replaceChildren(p);
+    } else {
+      body.replaceChildren(table);
     }
   }
 
-  const closeBtn = document.getElementById('scores-close');
-  const show = GameMode.popup(modal, openBtn, closeBtn);
+  gameTabs.forEach((tab, i) => {
+    tab.addEventListener('click', () => { shownGame = tab.dataset.game; renderTable(); });
+    // Arrow keys move between the game buttons, like the main tab bar.
+    tab.addEventListener('keydown', (e) => {
+      const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+      if (!step) return;
+      const next = gameTabs[(i + step + gameTabs.length) % gameTabs.length];
+      shownGame = next.dataset.game;
+      renderTable();
+      next.focus();
+    });
+  });
 
-  openBtn.addEventListener('click', () => { renderTable(); show(true); });
+  const closeBtn = document.getElementById('scores-close');
+  // Focus goes to the game being shown, which keeps the pop-up scrolled to the top.
+  const selectedTab = { focus: () => gameTabs.find((t) => t.dataset.game === shownGame).focus() };
+  const show = GameMode.popup(modal, openBtn, selectedTab);
+
+  openBtn.addEventListener('click', () => {
+    // Open on the game being played.
+    if (CATEGORIES[document.body.dataset.mode]) shownGame = document.body.dataset.mode;
+    renderTable();
+    show(true);
+  });
   closeBtn.addEventListener('click', () => show(false));
+  // Reset clears the best times of the game being shown.
   document.getElementById('scores-reset').addEventListener('click', () => {
-    if (!confirm('Reset all best times? This cannot be undone.')) return;
-    writeAll({});
+    const title = CATEGORIES[shownGame].title;
+    if (!confirm(`Reset all ${title} best times? This cannot be undone.`)) return;
+    const data = readAll();
+    for (const id of Object.keys(data)) if (id.startsWith(`${shownGame}:`)) delete data[id];
+    writeAll(data);
     renderTable();
     window.dispatchEvent(new CustomEvent('scoreschange'));
   });

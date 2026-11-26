@@ -13,14 +13,14 @@ Installable as a home-screen app and works offline.
 | `style.css` | All styles. Theme colours are CSS variables on `:root` (light) and `:root[data-theme="dark"]` |
 | `theme.js` | Light/dark toggle. Dark is the default; an inline script in `<head>` applies the saved theme before the page draws |
 | `modes.js` | Tab switching (fires `modechange`; `GameMode.isActive('sudoku' \| 'groups' \| 'sort' \| 'arrows')`) and the pieces the games share: `GameMode.timer`, `popup`, `message`, `buzz`, `formatTime`, `whenShown` |
-| `scores.js` | Best times per game and difficulty/size, plus the 🏆 Best times pop-up (`Scores.record`, `Scores.bestLabel`, `Scores.verdict` = end of the win message). Kept in memory after the first read |
+| `scores.js` | Best times per game and difficulty/size, plus the 🏆 Best times pop-up: a button per game at the top, one game shown at a time, opening on the game being played; Reset clears only the shown game (`Scores.record`, `Scores.bestLabel`, `Scores.verdict` = end of the win message). Kept in memory after the first read |
 | `sudoku.js` / `app.js` | Sudoku logic (generator, solver) / Sudoku UI |
 | `groups.js` / `groups-app.js` | Groups logic (unique-solution generator, difficulty grader) / Groups UI |
 | `sort.js` / `sort-app.js` | Sort logic (rules, solver, solvable generator) / Sort UI |
 | `arrows.js` / `arrows-app.js` | Arrows logic (blocking check, solver, solvable generator, grader) / Arrows UI |
 | `sw.js` | Service worker: offline cache, network-first (falls back to the cached copy if the network takes over 3 s) |
 | `TODO.md` | Planned work and ideas for later |
-| `manifest.webmanifest`, `icons/` | Home-screen install. `icon.svg` is the source; PNGs are rendered from it (`icon-maskable-512.png` has the art scaled to 88% for Android masks) |
+| `manifest.webmanifest`, `icons/` | Home-screen install. `icon.svg` is the source (2 × 2: Sudoku, Groups / Sort, Arrows); PNGs are rendered from it with Playwright (`icon-maskable-512.png` has the art scaled to 88% for Android masks) |
 
 Logic files (`sudoku.js`, `groups.js`, `sort.js`, `arrows.js`) have no DOM code and can be loaded in Node
 with `require()` for testing.
@@ -35,8 +35,10 @@ with `require()` for testing.
   `GameMode.timer(mode, el, canRun, save)` (`start`, `pause`, `reset(ms)`, `ms()`, `show()`), which
   pauses and saves when the game's tab is hidden or the app goes to the background; one shared
   tick redraws only the showing timer.
-- **Pop-ups** use `GameMode.popup(modal, openButton, focusEl, dismiss)`: Escape and tapping outside
-  call `dismiss` (default: close), and closing refocuses the opening button.
+- **Pop-ups** use `GameMode.popup(modal, openButton, focusEl, dismiss)`: Escape, tapping outside and the
+  phone's back button (Android) call `dismiss` (default: close), and closing refocuses the opening button.
+  Opening pushes a history entry that back pops (`popstate`); closing any other way calls `history.back()`
+  to take it off again, so back with nothing open still leaves the app.
 - **Speed:** on first launch Groups, Sort and Arrows only make a puzzle when their tab is first opened
   (`GameMode.whenShown`). Redraws skip squares whose look hasn't changed (`shown[]` in Sudoku and
   Groups); Sort only re-measures its layout when the box count or size changes (resizes go through
