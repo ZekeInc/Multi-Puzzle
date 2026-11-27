@@ -72,6 +72,7 @@
     if (!cache) {
       try { cache = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { cache = {}; }
       if (!cache._arrowsBend) migrateArrows(cache);
+      if (!cache._arrowsHard2) migrateArrowsHard(cache);
     }
     return cache;
   }
@@ -88,6 +89,21 @@
     }
     Object.assign(data, moved);
     data._arrowsBend = 1;
+    try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) { /* ignore */ }
+  }
+
+  // When the flat board got a harder Hard, the old Hard became Medium and the
+  // old Medium (1 bend) went away. Runs once; cube keys (`cube-…`) are untouched.
+  function migrateArrowsHard(data) {
+    const moved = {};
+    for (const id of Object.keys(data)) {
+      const m = /^arrows:(\d+)-(medium|hard)$/.exec(id);
+      if (!m) continue;
+      if (m[2] === 'hard') moved[`arrows:${m[1]}-medium`] = data[id];
+      delete data[id];
+    }
+    Object.assign(data, moved);
+    data._arrowsHard2 = 1;
     try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) { /* ignore */ }
   }
 

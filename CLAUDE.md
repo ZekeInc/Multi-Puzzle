@@ -107,23 +107,27 @@ with `require()` for testing.
 
 - The board is an N×N grid (5–10) completely filled with arrow pieces. A piece is `{ cells, dir }`:
   `cells` is its path of squares, head first, and `dir` (0 up / 1 right / 2 down / 3 left) is the way the
-  head points, straight on from the square behind it. Levels differ in piece shape (`SHAPES` in
-  `arrows.js`): **Easy** straight, 1–3 squares; **Medium** up to 1 bend, 1–4 squares; **Hard** up to 3 bends,
-  1–6 squares. (Easy is what used to be Hard, from before pieces could bend.)
+  head points, straight on from the square behind it. Flat levels (`FLAT_LEVELS` in `arrows.js`; piece shapes
+  in `SHAPES`): **Easy** straight, 1–3 squares; **Medium** up to 3 bends, 1–6 squares, hardest of 12 deals;
+  **Hard** the same shapes, built for long chains (`chains`: greed picks the move making the longest
+  must-go-first chain) with greed 0.6–1, hardest of 150 deals. History: Easy was the first Hard (straight);
+  Medium was the Hard with up to 3 bends; the old 1-bend Medium was dropped.
 - Tapping a piece slides it off head first along its own path, like a snake, if every square straight ahead
   of its head up to the edge is empty; otherwise it shakes, the first piece in the way flashes (`.blocking`)
   and it counts as a mistake (shown, but doesn't stop a best time).
 - Removing a piece only frees squares, so the order never matters: a board is solvable exactly when no
   pieces block each other in a loop. `Arrows.solve` / `Arrows.free` / `Arrows.blocker` need no search.
-- `Arrows.generate(n, level)` tiles the grid (`tile()` grows random paths within the level's bend limit),
+- `Arrows.generate(n, level)` tiles the grid (`tile()` grows random paths within the shape's bend limit),
   then plays forwards: again and again it lifts off a shape that has a clear way out, with either end as
   the head, so every board is solvable. With bends this can rarely get stuck, and that deal is thrown away.
-  `greed` = how often it takes the longest clear path (harder). Deals 12 (1 s budget, at least 3) with
-  greed spread 0–1, grades each (`grade()`: `layers` = longest must-go-first chain, `tight` = how few
-  pieces are free each step; score = layers + 10 × tight) and keeps the hardest.
+  `greed` = how often it takes the best move: the longest clear path, or with `chains` the longest chain.
+  Deals the level's count (1 s budget, at least 3) with greed spread from its lowest to 1, grades each
+  (`grade()`: `layers` = longest must-go-first chain, `tight` = how few pieces are free each step;
+  score = layers + 10 × tight) and keeps the hardest. The score can't compare straight with bent boards
+  (straight boards have more, smaller pieces, so longer chains), only boards of one shape.
 - **3D cube** (Preferences → Board: Flat / 3D cube, `state.shape` `'flat'` | `'cube'`): an n × n × n cube
   (3–5). Directions add 4 = front (towards the player at the start) and 5 = back. **Easy**: single blocks
-  (`generateCubeOne`). **Medium / Hard**: the flat board's piece shapes (`SHAPES`, up to 1 / 3 bends), whose
+  (`generateCubeOne`). **Medium / Hard**: piece shapes `bend1` / `bend3` (up to 1 / 3 bends), whose
   paths can also run between layers (`tile()` / `generateOne()` take a `depth`). The logic is shared: a board
   has `depth` (1 flat, n cube), square index = (layer × n + row) × n + column, and `DR` / `DC` / `DZ` give each
   direction's step. `Arrows.generateCube(n, level)` deals 12 and takes the easiest (Easy), middle (Medium) or
@@ -143,7 +147,8 @@ with `require()` for testing.
   (5–10 flat, 3–5 cube; the size menu is rebuilt when Board changes).
   Saved game holds the pieces and `order` (pieces removed so far; Undo pops it). Saves from before bends
   (`{ r, c, len, dir }` pieces) load via `Arrows.fromStraight` if they were Hard (now Easy); old Easy and
-  Medium games are dropped.
+  Medium games are dropped. Flat saves without `levels: 2` are from before the harder Hard: Hard loads as
+  Medium, Medium is dropped.
 - The board is one SVG in square units. Each piece is a `<g class="a-piece" role="button">` with a thick
   rounded tube, a thin shaft and a head, all drawn along one line from behind the tail, through the piece
   and off the board; dashes show the piece's part of it. Sliding out moves the dash offset and the head by
@@ -152,7 +157,8 @@ with `require()` for testing.
 - Best-time keys: `size-level` (e.g. `7-hard`), labelled like Groups (`sizeLevelLabel` in `scores.js`); the
   cube's are `cube-size-level` (e.g. `cube-4-hard`, shown as 4 × 4 × 4, Hard, after the flat ones).
   `migrateArrows` in `scores.js` moved old Hard records to Easy once and dropped old Easy / Medium
-  (marker `_arrowsBend` in the stored data).
+  (marker `_arrowsBend` in the stored data); `migrateArrowsHard` then moved flat Hard to Medium and dropped
+  flat Medium (marker `_arrowsHard2`). Cube keys are never touched by either.
 
 ## Testing
 

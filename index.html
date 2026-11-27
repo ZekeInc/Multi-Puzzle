@@ -355,10 +355,12 @@
           <p>Clear the board. Tap an arrow to slide it off the board <b>the way it points</b>.</p>
           <p>It only goes if <b>nothing is in its way</b> all the way to the edge. If something is,
           the arrow shakes, the piece in the way flashes, and it counts as a <b>mistake</b>.</p>
-          <p>On <b>Medium</b> arrows can bend once, and on <b>Hard</b> up to three times. A bent arrow
-          follows its own path out, so only the way its head points needs to be clear.</p>
+          <p>On <b>Medium</b> and <b>Hard</b> arrows can bend up to three times, and Hard boards have longer
+          chains of arrows that must go first. A bent arrow follows its own path out, so only the way its
+          head points needs to be clear.</p>
           <p><b>3D cube</b>: drag to turn the cube and tap a block to send it out. Blocks can also go
-          towards you or away from you: a <b>dot</b> on a face means the block leaves through that face.</p>
+          towards you or away from you: a <b>dot</b> on a face means the block leaves through that face.
+          On the cube, Easy has single blocks, Medium arrows bend once and Hard up to three times.</p>
           <p>Every puzzle can be cleared. Tap <b>⚙ Preferences</b> to choose the board, difficulty and size.</p>
           <button id="a-rules-close">Got it</button>
         </div>
@@ -411,16 +413,16 @@
 
   <script src="theme.js?v=7"></script>
   <script src="modes.js?v=14"></script>
-  <script src="scores.js?v=14"></script>
+  <script src="scores.js?v=15"></script>
   <script src="sudoku.js?v=5"></script>
   <script src="app.js?v=5"></script>
   <script src="groups.js?v=6"></script>
   <script src="groups-app.js?v=9"></script>
   <script src="sort.js?v=11"></script>
   <script src="sort-app.js?v=19"></script>
-  <script src="arrows.js?v=3"></script>
+  <script src="arrows.js?v=4"></script>
   <script src="arrows-cube.js?v=1"></script>
-  <script src="arrows-app.js?v=3"></script>
+  <script src="arrows-app.js?v=4"></script>
   <script>
     if ('serviceWorker' in navigator && location.protocol !== 'file:') {
       window.addEventListener('load', () => navigator.serviceWorker.register('sw.js'));
