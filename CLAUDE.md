@@ -108,10 +108,18 @@ with `require()` for testing.
 - The board is an N×N grid (5–10) completely filled with arrow pieces. A piece is `{ cells, dir }`:
   `cells` is its path of squares, head first, and `dir` (0 up / 1 right / 2 down / 3 left) is the way the
   head points, straight on from the square behind it. Flat levels (`FLAT_LEVELS` in `arrows.js`; piece shapes
-  in `SHAPES`): **Easy** straight, 1–3 squares; **Medium** up to 3 bends, 1–6 squares, hardest of 12 deals;
-  **Hard** the same shapes, built for long chains (`chains`: greed picks the move making the longest
-  must-go-first chain) with greed 0.6–1, hardest of 150 deals. History: Easy was the first Hard (straight);
-  Medium was the Hard with up to 3 bends; the old 1-bend Medium was dropped.
+  in `SHAPES`): **Easy** straight, 1–3 squares, the hardest of 12 deals by `grade()`. **Medium** up to 3 bends,
+  1–6 squares, made to need as many moves first as Easy (`match: 'easy'`: two Easy boards are measured, the
+  closest of 40 deals is kept and flipped up towards that count if short). **Hard** is built for *moves needed first* (`movesFirst()`: for each piece, every piece
+  in its way and in theirs, transitively; averaged): shape `hard` = shorter bent pieces (1–4 squares, up to
+  3 bends, so more pieces get in each other's way) plus one long piece of N − 2 to N + 2 squares with up to
+  5 bends, grown first (`long` in `tile()`, regrown until at least one end is off the board's outer ring;
+  `generateOne()` and `improve()` only give it a head off the ring, the tail may be on it; longer pieces
+  lower the count, so only one; it is always piece 0, and the board records `longCount`), greed 0.6–1 picking the move needing the most moves
+  first (`chains: 'moves'`), the hardest of 40 deals by that count, then `improve()` flips pieces (other
+  end as head) 20 × n² times, keeping flips that leave the board solvable and no easier. Roughly 2× Medium's
+  moves-first count. History: Easy was the first Hard (straight); Medium was the Hard with up to 3 bends;
+  the old 1-bend Medium was dropped.
 - Tapping a piece slides it off head first along its own path, like a snake, if every square straight ahead
   of its head up to the edge is empty; otherwise it shakes, the first piece in the way flashes (`.blocking`)
   and it counts as a mistake (shown, but doesn't stop a best time).
@@ -120,7 +128,8 @@ with `require()` for testing.
 - `Arrows.generate(n, level)` tiles the grid (`tile()` grows random paths within the shape's bend limit),
   then plays forwards: again and again it lifts off a shape that has a clear way out, with either end as
   the head, so every board is solvable. With bends this can rarely get stuck, and that deal is thrown away.
-  `greed` = how often it takes the best move: the longest clear path, or with `chains` the longest chain.
+  `greed` = how often it takes the best move: the longest clear path, the longest chain (`chains: true`)
+  or the most moves needed first (`chains: 'moves'`).
   Deals the level's count (1 s budget, at least 3) with greed spread from its lowest to 1, grades each
   (`grade()`: `layers` = longest must-go-first chain, `tight` = how few pieces are free each step;
   score = layers + 10 × tight) and keeps the hardest. The score can't compare straight with bent boards
