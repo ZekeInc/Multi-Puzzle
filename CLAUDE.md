@@ -28,9 +28,7 @@ with `require()` for testing.
 ## Conventions
 
 - **Cache busting:** when changing any CSS/JS file, bump its `?v=` number in `index.html` and
-  bump `CACHE` in `sw.js`, so installed copies pick up the change. `CACHE`'s number is the app's version,
-  shown as `v38` etc. in the top right of the rules pop-ups (`.app-version`): bump `VERSION` in `modes.js`
-  to the same number. If you add a file, add it to
+  bump the version (see Versions), which also names `CACHE` in `sw.js`, so installed copies pick up the change. If you add a file, add it to
   the `FILES` list in `sw.js` too.
 - **Each game** keeps its own state and saved progress in `localStorage`
   (`sudoku-save-v1`, `groups-save-v1`, `sort-save-v1`, `arrows-save-v1`). Its timer comes from
@@ -61,6 +59,15 @@ with `require()` for testing.
   `touch-action: pan-x pan-y` and `modes.js` cancels Safari's `gesturestart`. Keep `select`
   text at 16px or more, or iOS zooms in when a menu is tapped.
 - **Confirm before losing progress:** New, Restart, Clear and Solve ask first when a game is in progress.
+
+## Versions
+
+- The app's version is `major.minor`, shown as e.g. `v4.0` in the top right of the rules pop-ups
+  (`.app-version`, filled from `VERSION` in `modes.js`). `CACHE` in `sw.js` is `multi-puzzle-v<version>`:
+  always change both together.
+- **Major** (N.0): one more whenever a new game is added (4.0 = Sudoku, Groups, Sort, Arrows).
+- **Minor** (4.N): one more for any other release, however small. After 4.9 comes 4.10, then 4.11.
+- Bump once per release (pull request), not per commit.
 
 ## Groups game notes
 
