@@ -6,15 +6,16 @@
 // A piece is { cells, dir }: cells is its path of squares, head first (each
 // square next to the one before), and dir is the way the head points:
 // 0 up / 1 right / 2 down / 3 left. For a piece of 2+ squares the head points
-// straight on from the square behind it. Pieces can bend (Medium: up to 1 bend,
-// Hard: up to 3); Easy pieces are straight.
+// straight on from the square behind it. On the flat board Easy pieces are
+// straight, and Medium and Hard pieces bend up to 3 times (Hard is built for
+// longer must-go-first chains); see FLAT_LEVELS.
 //
 // A board is { size, pieces }. Removing a piece only ever frees squares, so a
 // board can be cleared exactly when no pieces block each other in a loop, and
 // then taking off any free piece, again and again, always clears it.
 //
 // generate(n, level) takes level 'easy' | 'medium' | 'hard'. generateCube(n,
-// level) makes the 3D version: an n × n × n cube of single blocks (see below).
+// level) makes the 3D version: an n × n × n cube (see below).
 
 (function (root) {
   'use strict';
@@ -26,12 +27,22 @@
   const DZ = [0, 0, 0, 0, 1, -1];
   const LEVELS = ['easy', 'medium', 'hard'];
 
-  // Per level: most bends in one piece, how likely each length is (weights for
-  // lengths 1, 2, 3, ...), and how often a piece turns while it grows when it may.
+  // Piece shapes: most bends in one piece, how likely each length is (weights
+  // for lengths 1, 2, 3, ...), and how often a piece turns while it grows when
+  // it may.
   const SHAPES = {
-    easy: { bends: 0, weights: [1, 4, 4], turn: 0 },
-    medium: { bends: 1, weights: [1, 3, 4, 4], turn: 0.7 },
-    hard: { bends: 3, weights: [1, 2, 3, 3, 3, 3], turn: 0.8 },
+    straight: { bends: 0, weights: [1, 4, 4], turn: 0 },
+    bend1: { bends: 1, weights: [1, 3, 4, 4], turn: 0.7 },
+    bend3: { bends: 3, weights: [1, 2, 3, 3, 3, 3], turn: 0.8 },
+  };
+
+  // Flat board levels: the piece shape, how many boards to deal (the hardest
+  // is kept), the lowest greed dealt, and whether greed goes for the longest
+  // must-go-first chain (`chains`) instead of the longest clear path.
+  const FLAT_LEVELS = {
+    easy: { shape: 'straight', deals: 12, minGreed: 0, chains: false },
+    medium: { shape: 'bend3', deals: 12, minGreed: 0, chains: false },
+    hard: { shape: 'bend3', deals: 150, minGreed: 0.6, chains: true },
   };
 
   function randInt(n) {
@@ -196,42 +207,47 @@
   // point it that way and lift it off. Every piece's path then crosses only
   // pieces that went before it, so the board is solvable. (Straight pieces
   // never get stuck; bent ones rarely can, and then the deal is thrown away.)
-  // `greed` (0–1) is how often the shape with the longest clear path is taken
-  // instead of a random one; long paths over pieces that went first make more
-  // pieces wait on others.
-  function generateOne(n, level, greed, depth = 1) {
-    const paths = tile(n, SHAPES[level] || SHAPES.easy, depth);
+  // `greed` (0–1) is how often the best move is taken instead of a random one:
+  // the one with the longest clear path (long paths over pieces that went first
+  // make more pieces wait on others), or with `chains`, the one that makes the
+  // longest chain of pieces that must go first.
+  function generateOne(n, shape, greed, depth = 1, chains = false) {
+    const paths = tile(n, SHAPES[shape], depth);
     const owner = new Int16Array(n * n * depth).fill(-1);
     paths.forEach((sq, id) => { for (const i of sq) owner[i] = id; });
     const off = new Array(paths.length).fill(false);
     const pieces = new Array(paths.length);
     const options = paths.map((sq) => orientations(sq, n, depth));
+    const chain = new Array(paths.length).fill(0);   // longest must-go-first chain ending at each piece
     for (let left = paths.length; left; left--) {
-      const moves = [];   // [id, piece, path length]
+      const moves = [];   // [id, piece, path length, chain depth]
       options.forEach((opts, id) => {
         if (off[id]) return;
         for (const p of opts) {
           const head = p.cells[0];
           let z = Math.floor(head / (n * n)) + DZ[p.dir];
-          let r = Math.floor(head / n) % n + DR[p.dir], c = head % n + DC[p.dir], len = 0, clear = true;
+          let r = Math.floor(head / n) % n + DR[p.dir], c = head % n + DC[p.dir], len = 0, clear = true, deep = 0;
           while (r >= 0 && r < n && c >= 0 && c < n && z >= 0 && z < depth) {
             const o = owner[(z * n + r) * n + c];
             if (o >= 0 && !off[o]) { clear = false; break; }
+            if (o >= 0) deep = Math.max(deep, chain[o]);
             r += DR[p.dir]; c += DC[p.dir]; z += DZ[p.dir]; len++;
           }
-          if (clear) moves.push([id, p, len]);
+          if (clear) moves.push([id, p, len, deep + 1]);
         }
       });
       if (!moves.length) return null;
       let m;
+      const key = chains ? 3 : 2;
       if (Math.random() < greed) {
-        const best = Math.max(...moves.map((x) => x[2]));
-        const top = moves.filter((x) => x[2] === best);
+        const best = Math.max(...moves.map((x) => x[key]));
+        const top = moves.filter((x) => x[key] === best);
         m = top[randInt(top.length)];
       } else {
         m = moves[randInt(moves.length)];
       }
       pieces[m[0]] = m[1];
+      chain[m[0]] = m[3];
       off[m[0]] = true;
     }
     return { size: n, depth, pieces };
@@ -266,24 +282,27 @@
     return { layers, tight, score: layers + 10 * tight };
   }
 
-  // Deal up to 12 boards (1 s budget, at least 3) with a spread of greed and
-  // keep the hardest. The levels differ in the shapes of the pieces: straight
-  // (Easy), up to 1 bend (Medium), up to 3 bends (Hard).
+  // Deal boards for a level (FLAT_LEVELS; 1 s budget, at least 3) with greed
+  // spread from its lowest to 1, and keep the hardest. Easy: straight pieces;
+  // Medium: up to 3 bends; Hard: the same shapes, built for long chains and
+  // the hardest of 150 deals.
   const POOL = 12, BUDGET_MS = 1000;
 
   function generate(n, level) {
     if (!LEVELS.includes(level)) level = 'medium';
+    const cfg = FLAT_LEVELS[level];
     const deadline = Date.now() + BUDGET_MS;
-    const pool = [];
-    for (let tries = 0; pool.length < POOL && (pool.length < 3 || Date.now() < deadline) && tries < 200; tries++) {
-      const b = generateOne(n, level, pool.length / (POOL - 1));
+    let best = null, dealt = 0;
+    for (let tries = 0; dealt < cfg.deals && (dealt < 3 || Date.now() < deadline) && tries < cfg.deals * 4; tries++) {
+      const greed = cfg.minGreed + (1 - cfg.minGreed) * (dealt / (cfg.deals - 1));
+      const b = generateOne(n, cfg.shape, greed, 1, cfg.chains);
       if (!b) continue;
+      dealt++;
       b.grade = grade(b);
-      pool.push(b);
+      if (!best || b.grade.score > best.grade.score) best = b;
     }
-    if (!pool.length) throw new Error('Could not generate a puzzle');
-    pool.sort((a, b) => a.grade.score - b.grade.score);
-    return Object.assign(pool[pool.length - 1], { level });
+    if (!best) throw new Error('Could not generate a puzzle');
+    return Object.assign(best, { level });
   }
 
   // ---------- 3D cube ----------
@@ -335,7 +354,7 @@
     const pool = [];
     for (let tries = 0; pool.length < POOL && (pool.length < 3 || Date.now() < deadline) && tries < 200; tries++) {
       const greed = pool.length / (POOL - 1);
-      const b = level === 'easy' ? generateCubeOne(n, greed) : generateOne(n, level, greed, n);
+      const b = level === 'easy' ? generateCubeOne(n, greed) : generateOne(n, level === 'medium' ? 'bend1' : 'bend3', greed, n);
       if (!b) continue;
       b.grade = grade(b);
       pool.push(b);
@@ -349,7 +368,7 @@
   const api = {
     generateCube, generateCubeOne,
     generate, generateOne, grade, solve, free, blocker, ownerGrid, bends, stepDir, fromStraight,
-    DR, DC, DZ, LEVELS, SHAPES,
+    DR, DC, DZ, LEVELS, SHAPES, FLAT_LEVELS,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Arrows = api;

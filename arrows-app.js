@@ -50,6 +50,7 @@
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify({
         size: state.size,
+        levels: 2,      // flat levels since the harder Hard (see load)
         shape: state.shape,
         level: state.level,
         pieces: state.pieces,
@@ -72,6 +73,12 @@
         if (d.level !== 'hard') return false;
         d.level = 'easy';
         d.pieces = d.pieces.map((p) => Arrows.fromStraight(p, d.size));
+      }
+      // Flat games from before the harder Hard: their Hard is now Medium; the
+      // old Medium (1 bend) is gone, so those games are dropped.
+      if (d.shape !== 'cube' && !d.levels) {
+        if (d.level === 'medium') return false;
+        if (d.level === 'hard') d.level = 'medium';
       }
       const removed = d.pieces.map(() => false);
       for (const id of d.order) removed[id] = true;
