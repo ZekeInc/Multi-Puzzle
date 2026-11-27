@@ -175,17 +175,9 @@
       if (z > 0) out.push(i - n * n);
       return out;
     };
-    // A few long pieces first (`shape.long`: { count, min, max, bends } per
-    // board size n), then the rest as usual.
-    const long = shape.long ? shape.long(n) : null;
-    const order = shuffle([...Array(n * n * depth).keys()]);
-    const starts = long ? [...order.slice(0, long.count), ...order] : order;
-    for (let k = 0; k < starts.length; k++) {
-      const start = starts[k];
-      if (taken[start]) continue;
-      const isLong = long && k < long.count;
-      const want = isLong ? long.min + randInt(long.max - long.min + 1) : pickLength(shape.weights);
-      const maxBends = isLong ? long.bends : shape.bends;
+    // Grow a path from `start` up to `want` squares with at most `maxBends`
+    // bends, at either end. Marks its squares as taken.
+    function grow(start, want, maxBends) {
       const path = [start];
       taken[start] = 1;
       let turns = 0;
@@ -209,7 +201,33 @@
         taken[next] = 1;
         turns += turn;
       }
-      paths.push(path);
+      return path;
+    }
+
+    // A few long pieces first (`shape.long`: { count, min, max, bends } per
+    // board size n). Neither end of a long piece may be on the outer ring of
+    // the board, so it can't simply leave from the edge: grow it again (from
+    // another inside square) until both ends are inside and it is long enough.
+    const inside = (i) => {
+      const r = Math.floor(i / n) % n, c = i % n;
+      return r > 0 && r < n - 1 && c > 0 && c < n - 1;
+    };
+    const long = shape.long ? shape.long(n) : null;
+    for (let k = 0; long && k < long.count; k++) {
+      const inner = [...Array(n * n * depth).keys()].filter((i) => inside(i) && !taken[i]);
+      for (let attempt = 0; attempt < 200 && inner.length; attempt++) {
+        const want = long.min + randInt(long.max - long.min + 1);
+        const path = grow(inner[randInt(inner.length)], want, long.bends);
+        if (path.length >= long.min && inside(path[0]) && inside(path[path.length - 1])) {
+          paths.push(path);
+          break;
+        }
+        for (const i of path) taken[i] = 0;   // try again
+      }
+    }
+    for (const start of shuffle([...Array(n * n * depth).keys()])) {
+      if (taken[start]) continue;
+      paths.push(grow(start, pickLength(shape.weights), shape.bends));
     }
     return paths;
   }
