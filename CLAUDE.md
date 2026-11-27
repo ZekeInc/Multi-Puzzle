@@ -108,14 +108,15 @@ with `require()` for testing.
 - The board is an N×N grid (5–10) completely filled with arrow pieces. A piece is `{ cells, dir }`:
   `cells` is its path of squares, head first, and `dir` (0 up / 1 right / 2 down / 3 left) is the way the
   head points, straight on from the square behind it. Flat levels (`FLAT_LEVELS` in `arrows.js`; piece shapes
-  in `SHAPES`): **Easy** straight, 1–3 squares; **Medium** up to 3 bends, 1–6 squares; both the hardest of 12
-  deals by `grade()`. **Hard** is built for *moves needed first* (`movesFirst()`: for each piece, every piece
+  in `SHAPES`): **Easy** straight, 1–3 squares, the hardest of 12 deals by `grade()`. **Medium** up to 3 bends,
+  1–6 squares, made to need as many moves first as Easy (`match: 'easy'`: two Easy boards are measured, the
+  closest of 40 deals is kept and flipped up towards that count if short). **Hard** is built for *moves needed first* (`movesFirst()`: for each piece, every piece
   in its way and in theirs, transitively; averaged): shorter bent pieces (`bend3short`, 1–4 squares, up to
   3 bends, so more pieces get in each other's way), greed 0.6–1 picking the move needing the most moves
   first (`chains: 'moves'`), the hardest of 40 deals by that count, then `improve()` flips pieces (other
   end as head) 20 × n² times, keeping flips that leave the board solvable and no easier. Roughly 2× Medium's
   moves-first count. History: Easy was the first Hard (straight); Medium was the Hard with up to 3 bends;
-  the old 1-bend Medium was dropped. By `movesFirst()` Easy sits between Medium and Hard on big boards.
+  the old 1-bend Medium was dropped.
 - Tapping a piece slides it off head first along its own path, like a snake, if every square straight ahead
   of its head up to the edge is empty; otherwise it shakes, the first piece in the way flashes (`.blocking`)
   and it counts as a mistake (shown, but doesn't stop a best time).

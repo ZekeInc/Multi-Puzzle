@@ -42,10 +42,12 @@
   // the most moves needed before the piece can go), what picks the hardest
   // deal ('grade': grade() score; 'moves': movesFirst()), and how many arrow
   // flips per square improve the pick afterwards (see improve()). The hardest
-  // deal is kept.
+  // deal is kept, except with `match`: then the deal whose movesFirst() is
+  // closest to that level's (measured on two of its boards) is kept, and
+  // flipped up towards it if it falls short.
   const FLAT_LEVELS = {
     easy: { shape: 'straight', deals: 12, minGreed: 0, chains: false, pick: 'grade', flips: 0 },
-    medium: { shape: 'bend3', deals: 12, minGreed: 0, chains: false, pick: 'grade', flips: 0 },
+    medium: { shape: 'bend3', deals: 40, minGreed: 0, chains: 'moves', pick: 'moves', match: 'easy', flips: 20 },
     hard: { shape: 'bend3short', deals: 40, minGreed: 0.6, chains: 'moves', pick: 'moves', flips: 20 },
   };
 
@@ -317,10 +319,10 @@
   // Make a board harder: again and again, point one piece the other way (its
   // other end becomes the head; a single square turns), and keep the change if
   // the board can still be cleared and pieces need at least as many moves first.
-  function improve(board, tries) {
+  function improve(board, tries, goal = Infinity) {
     const n = board.size;
     let best = movesFirst(board).avg;
-    for (let t = 0; t < tries; t++) {
+    for (let t = 0; t < tries && best < goal; t++) {
       const id = randInt(board.pieces.length), old = board.pieces[id];
       let next;
       if (old.cells.length === 1) {
@@ -371,8 +373,8 @@
 
   // Deal boards for a level (FLAT_LEVELS; 1 s budget, at least 3) with greed
   // spread from its lowest to 1, and keep the hardest (Easy and Medium by
-  // grade(), Hard by movesFirst()). Easy: straight pieces; Medium: up to 3
-  // bends. Hard: shorter pieces with up to 3 bends, built so
+  // grade(), Hard by movesFirst()). Easy: straight pieces. Medium: up to 3
+  // bends, as many moves needed first as Easy (see `match`). Hard: shorter pieces with up to 3 bends, built so
   // pieces need as many moves as possible before they can go, the hardest of
   // 40 deals by that count, then improve()d.
   const POOL = 12, BUDGET_MS = 1000;
@@ -381,17 +383,21 @@
     if (!LEVELS.includes(level)) level = 'medium';
     const cfg = FLAT_LEVELS[level];
     const deadline = Date.now() + BUDGET_MS;
-    let best = null, dealt = 0;
+    let best = null, dealt = 0, goal = Infinity;
+    if (cfg.match) {
+      goal = (movesFirst(generate(n, cfg.match)).avg + movesFirst(generate(n, cfg.match)).avg) / 2;
+    }
     for (let tries = 0; dealt < cfg.deals && (dealt < 3 || Date.now() < deadline) && tries < cfg.deals * 4; tries++) {
       const greed = cfg.minGreed + (1 - cfg.minGreed) * (dealt / (cfg.deals - 1));
       const b = generateOne(n, cfg.shape, greed, 1, cfg.chains);
       if (!b) continue;
       dealt++;
       b.score = cfg.pick === 'moves' ? movesFirst(b).avg : grade(b).score;
+      if (cfg.match) b.score = -Math.abs(b.score - goal);   // closest to the goal wins
       if (!best || b.score > best.score) best = b;
     }
     if (!best) throw new Error('Could not generate a puzzle');
-    if (cfg.flips) improve(best, cfg.flips * n * n);
+    if (cfg.flips) improve(best, cfg.flips * n * n, goal);
     best.grade = grade(best);
     return Object.assign(best, { level });
   }
