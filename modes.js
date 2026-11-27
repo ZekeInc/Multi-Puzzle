@@ -220,7 +220,7 @@
   // The app's version, shown in the corner of the rules pop-ups: major.minor.
   // Major = one more for each new game; minor = one more for any other
   // release (4.9 is followed by 4.10). Keep CACHE in sw.js the same.
-  const VERSION = '4.2';
+  const VERSION = '4.3';
   document.querySelectorAll('.app-version').forEach((el) => { el.textContent = `v${VERSION}`; });
 
   window.GameMode = {

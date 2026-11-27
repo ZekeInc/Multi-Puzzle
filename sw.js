@@ -1,7 +1,7 @@
 // Service worker: caches the app so it works offline once installed.
 // CACHE names the app's version (see VERSION in modes.js and "Versions" in
 // CLAUDE.md): change both together for every release, so phones pick it up.
-const CACHE = 'multi-puzzle-v4.2';
+const CACHE = 'multi-puzzle-v4.3';
 const FILES = [
   './',
   'index.html',
