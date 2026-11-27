@@ -1,83 +1,79 @@
 // Core Sudoku logic: solving, puzzle generation, and validation.
-// Boards are flat arrays of 81 numbers, where 0 means an empty cell.
+// Boards are flat arrays of 81 numbers, where 0 means an empty square.
 
 (function (root) {
   'use strict';
 
-  function shuffle(arr) {
-    for (let i = arr.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [arr[i], arr[j]] = [arr[j], arr[i]];
-    }
-    return arr;
-  }
+  const { shuffle } = typeof module !== 'undefined' && module.exports ? require('./shared.js') : root.Shared;
 
-  function canPlace(board, idx, num) {
-    const row = Math.floor(idx / 9);
-    const col = idx % 9;
-    for (let i = 0; i < 9; i++) {
-      if (board[row * 9 + i] === num && row * 9 + i !== idx) return false;
-      if (board[i * 9 + col] === num && i * 9 + col !== idx) return false;
+  // Can `digit` go in square `index` without repeating in its row, column or box?
+  function canPlace(board, index, digit) {
+    const row = Math.floor(index / 9);
+    const column = index % 9;
+    for (let k = 0; k < 9; k++) {
+      if (board[row * 9 + k] === digit && row * 9 + k !== index) return false;
+      if (board[k * 9 + column] === digit && k * 9 + column !== index) return false;
     }
-    const br = row - (row % 3);
-    const bc = col - (col % 3);
-    for (let r = br; r < br + 3; r++) {
-      for (let c = bc; c < bc + 3; c++) {
-        const j = r * 9 + c;
-        if (j !== idx && board[j] === num) return false;
+    const boxRow = row - (row % 3);
+    const boxColumn = column - (column % 3);
+    for (let r = boxRow; r < boxRow + 3; r++) {
+      for (let c = boxColumn; c < boxColumn + 3; c++) {
+        const other = r * 9 + c;
+        if (other !== index && board[other] === digit) return false;
       }
     }
     return true;
   }
 
-  const BOX = [...Array(81).keys()].map((i) => 3 * Math.floor(i / 27) + Math.floor((i % 9) / 3));
+  // BOX_OF[square] = which 3 × 3 box (0–8) the square is in.
+  const BOX_OF = [...Array(81).keys()].map((i) => 3 * Math.floor(i / 27) + Math.floor((i % 9) / 3));
 
   // Counts solutions (stopping at `limit`) and returns the first one found.
-  // Each row, column and box keeps a bitmask of the numbers it already holds
-  // (bit n set = n is used), so a square's candidates are one OR away.
+  // Each row, column and box keeps a bitmask of the digits it already holds
+  // (bit d set = d is used), so a square's candidates are one OR away.
   function countSolutions(board, limit, randomize) {
-    const b = board.slice();
-    const rows = new Int32Array(9), cols = new Int32Array(9), boxes = new Int32Array(9);
+    const grid = board.slice();
+    const rowUsed = new Int32Array(9), columnUsed = new Int32Array(9), boxUsed = new Int32Array(9);
     for (let i = 0; i < 81; i++) {
-      if (!b[i]) continue;
-      const bit = 1 << b[i];
-      rows[Math.floor(i / 9)] |= bit; cols[i % 9] |= bit; boxes[BOX[i]] |= bit;
+      if (!grid[i]) continue;
+      const bit = 1 << grid[i];
+      rowUsed[Math.floor(i / 9)] |= bit; columnUsed[i % 9] |= bit; boxUsed[BOX_OF[i]] |= bit;
     }
     let count = 0;
     let first = null;
 
     function search() {
-      // Pick the empty cell with the fewest candidates.
-      let bestIdx = -1, bestUsed = 0, bestCount = 10;
+      // Pick the empty square with the fewest candidates.
+      let bestSquare = -1, bestUsed = 0, bestCount = 10;
       for (let i = 0; i < 81; i++) {
-        if (b[i] !== 0) continue;
-        const used = rows[Math.floor(i / 9)] | cols[i % 9] | boxes[BOX[i]];
-        let n = 9;
-        for (let m = used >> 1; m; m >>= 1) n -= m & 1;
-        if (n === 0) return false;
-        if (n < bestCount) {
-          bestIdx = i; bestUsed = used; bestCount = n;
-          if (n === 1) break;
+        if (grid[i] !== 0) continue;
+        const used = rowUsed[Math.floor(i / 9)] | columnUsed[i % 9] | boxUsed[BOX_OF[i]];
+        let candidates = 9;
+        for (let bits = used >> 1; bits; bits >>= 1) candidates -= bits & 1;
+        if (candidates === 0) return false;
+        if (candidates < bestCount) {
+          bestSquare = i; bestUsed = used; bestCount = candidates;
+          if (candidates === 1) break;
         }
       }
-      if (bestIdx === -1) {
+      if (bestSquare === -1) {
         count++;
-        if (!first) first = b.slice();
+        if (!first) first = grid.slice();
         return count >= limit;
       }
-      const cands = [];
-      for (let n = 1; n <= 9; n++) if (!(bestUsed & (1 << n))) cands.push(n);
-      if (randomize) shuffle(cands);
-      const r = Math.floor(bestIdx / 9), c = bestIdx % 9, x = BOX[bestIdx];
-      for (const n of cands) {
-        const bit = 1 << n;
-        b[bestIdx] = n;
-        rows[r] |= bit; cols[c] |= bit; boxes[x] |= bit;
+      const digits = [];
+      for (let digit = 1; digit <= 9; digit++) if (!(bestUsed & (1 << digit))) digits.push(digit);
+      if (randomize) shuffle(digits);
+      const row = Math.floor(bestSquare / 9), column = bestSquare % 9, box = BOX_OF[bestSquare];
+      for (const digit of digits) {
+        const bit = 1 << digit;
+        grid[bestSquare] = digit;
+        rowUsed[row] |= bit; columnUsed[column] |= bit; boxUsed[box] |= bit;
         const stop = search();
-        rows[r] &= ~bit; cols[c] &= ~bit; boxes[x] &= ~bit;
+        rowUsed[row] &= ~bit; columnUsed[column] &= ~bit; boxUsed[box] &= ~bit;
         if (stop) return true;
       }
-      b[bestIdx] = 0;
+      grid[bestSquare] = 0;
       return false;
     }
 
@@ -101,12 +97,12 @@
     const solution = generateSolved();
     const puzzle = solution.slice();
     let filled = 81;
-    for (const idx of shuffle([...Array(81).keys()])) {
+    for (const square of shuffle([...Array(81).keys()])) {
       if (filled <= target) break;
-      const saved = puzzle[idx];
-      puzzle[idx] = 0;
+      const saved = puzzle[square];
+      puzzle[square] = 0;
       if (countSolutions(puzzle, 2, false).count !== 1) {
-        puzzle[idx] = saved;
+        puzzle[square] = saved;
       } else {
         filled--;
       }
@@ -114,7 +110,7 @@
     return { puzzle, solution };
   }
 
-  // Returns the set of indices whose values conflict with another cell.
+  // Returns the set of squares whose digits clash with another square.
   function findConflicts(board) {
     const conflicts = new Set();
     for (let i = 0; i < 81; i++) {

@@ -44,7 +44,7 @@
     // laid out at now (base × the zoom baked in, see bake()).
     let scene = null, cube = null, base = 30, sq = 30;
 
-    const vec = (d) => [Arrows.DC[d], Arrows.DR[d], Arrows.DZ[d]];
+    const vec = (d) => [Arrows.COLUMN_STEP[d], Arrows.ROW_STEP[d], Arrows.LAYER_STEP[d]];
     const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
     const coords = (i) => [i % n, Math.floor(i / n) % n, Math.floor(i / (n * n))];   // x, y, z
     // Square next to square i in world direction v, or -1 off the cube.
@@ -59,8 +59,8 @@
     // goes out towards the block in front (or, for the head, out of the cube).
     function faceArt(p, k, f) {
       const len = p.cells.length;
-      const out = k === 0 ? p.dir : Arrows.stepDir(p.cells[k], p.cells[k - 1], n);
-      const inn = k === len - 1 ? -1 : Arrows.stepDir(p.cells[k + 1], p.cells[k], n);
+      const out = k === 0 ? p.dir : Arrows.stepDirection(p.cells[k], p.cells[k - 1], n);
+      const inn = k === len - 1 ? -1 : Arrows.stepDirection(p.cells[k + 1], p.cells[k], n);
       const flat = (d) => [dot(vec(d), FACES[f].R), dot(vec(d), FACES[f].D)];
       const pt = (v, t) => `${0.5 + v[0] * t},${0.5 + v[1] * t}`;
       let art = '';

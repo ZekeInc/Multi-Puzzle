@@ -14,47 +14,41 @@
 (function (root) {
   'use strict';
 
+  const { randomInt, shuffle } = typeof module !== 'undefined' && module.exports ? require('./shared.js') : root.Shared;
+
   const CAPACITY = 4;      // default blocks per tube
   const LEVELS = ['easy', 'medium', 'hard', 'expert'];   // plus 'random' (not graded)
 
   const capOf = (rules) => (rules && rules.cap) || CAPACITY;
 
-  function shuffle(arr) {
-    for (let i = arr.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [arr[i], arr[j]] = [arr[j], arr[i]];
-    }
-    return arr;
-  }
-
   const top = (tube) => tube[tube.length - 1];
 
   // Number of same-coloured blocks at the top of a tube.
   function topRun(tube) {
-    let n = 0;
-    for (let k = tube.length - 1; k >= 0 && tube[k] === top(tube); k--) n++;
-    return n;
+    let run = 0;
+    for (let k = tube.length - 1; k >= 0 && tube[k] === top(tube); k--) run++;
+    return run;
   }
 
   // How many blocks would move from tube `from` to tube `to` (0 = not allowed).
   function moveCount(state, from, to, rules) {
     const cap = capOf(rules);
-    const a = state[from], b = state[to];
-    if (from === to || !a.length || b.length >= cap) return 0;
-    if (b.length && top(b) !== top(a) && !(rules && rules.mix)) return 0;
-    return Math.min(topRun(a), cap - b.length);
+    const source = state[from], target = state[to];
+    if (from === to || !source.length || target.length >= cap) return 0;
+    if (target.length && top(target) !== top(source) && !(rules && rules.mix)) return 0;
+    return Math.min(topRun(source), cap - target.length);
   }
 
   function applyMove(state, from, to, rules) {
-    const n = moveCount(state, from, to, rules);
-    if (!n) return null;
-    const next = state.map((t) => t.slice());
-    next[to].push(...next[from].splice(next[from].length - n, n));
+    const count = moveCount(state, from, to, rules);
+    if (!count) return null;
+    const next = state.map((tube) => tube.slice());
+    next[to].push(...next[from].splice(next[from].length - count, count));
     return next;
   }
 
   function isSolved(state) {
-    return state.every((t) => t.every((c) => c === t[0]));
+    return state.every((tube) => tube.every((colour) => colour === tube[0]));
   }
 
   // Useful moves only: skip moving a whole single-colour tube into an empty one.
@@ -62,137 +56,137 @@
   // (with the mix rule) onto a different colour.
   function moves(state, rules) {
     const out = [];
-    const rank = (m) => (!state[m[1]].length ? 1 : top(state[m[1]]) === top(state[m[0]]) ? 0 : 2);
-    for (let i = 0; i < state.length; i++) {
-      const a = state[i];
-      if (!a.length) continue;
-      const uniform = topRun(a) === a.length;
+    const rank = ([from, to]) => (!state[to].length ? 1 : top(state[to]) === top(state[from]) ? 0 : 2);
+    for (let from = 0; from < state.length; from++) {
+      const source = state[from];
+      if (!source.length) continue;
+      const uniform = topRun(source) === source.length;
       let triedEmpty = false;
-      for (let j = 0; j < state.length; j++) {
-        if (!moveCount(state, i, j, rules)) continue;
-        if (!state[j].length) {
+      for (let to = 0; to < state.length; to++) {
+        if (!moveCount(state, from, to, rules)) continue;
+        if (!state[to].length) {
           if (uniform || triedEmpty) continue;  // pointless, or same as another empty
           triedEmpty = true;
         }
-        out.push([i, j]);
+        out.push([from, to]);
       }
     }
-    out.sort((m1, m2) => rank(m1) - rank(m2));
+    out.sort((first, second) => rank(first) - rank(second));
     return out;
   }
 
   // Minimal binary heap of [priority, order, item] (lowest first; ties go to the earliest).
   function Heap() {
-    const a = [];
+    const items = [];
     const less = (x, y) => x[0] < y[0] || (x[0] === y[0] && x[1] < y[1]);
     return {
-      get size() { return a.length; },
-      push(v) {
-        a.push(v);
-        for (let i = a.length - 1; i > 0;) {
-          const p = (i - 1) >> 1;
-          if (!less(a[i], a[p])) break;
-          [a[i], a[p]] = [a[p], a[i]]; i = p;
+      get size() { return items.length; },
+      push(item) {
+        items.push(item);
+        for (let i = items.length - 1; i > 0;) {
+          const parent = (i - 1) >> 1;
+          if (!less(items[i], items[parent])) break;
+          [items[i], items[parent]] = [items[parent], items[i]]; i = parent;
         }
       },
       pop() {
-        const top = a[0], last = a.pop();
-        if (a.length) {
-          a[0] = last;
+        const first = items[0], last = items.pop();
+        if (items.length) {
+          items[0] = last;
           for (let i = 0; ;) {
-            const l = 2 * i + 1, r = l + 1;
-            let m = i;
-            if (l < a.length && less(a[l], a[m])) m = l;
-            if (r < a.length && less(a[r], a[m])) m = r;
-            if (m === i) break;
-            [a[i], a[m]] = [a[m], a[i]]; i = m;
+            const left = 2 * i + 1, right = left + 1;
+            let smallest = i;
+            if (left < items.length && less(items[left], items[smallest])) smallest = left;
+            if (right < items.length && less(items[right], items[smallest])) smallest = right;
+            if (smallest === i) break;
+            [items[i], items[smallest]] = [items[smallest], items[i]]; i = smallest;
           }
         }
-        return top;
+        return first;
       },
     };
   }
 
   // Guided search for a short solution: always expands the position that looks
-  // closest to solved, by moves so far + W × the places where a tube changes
-  // colour (each move can remove at most one of those). Returns the moves (or
-  // null if none was found within `limit` explored positions) and how many
-  // positions it explored: a measure of how much trial and error the puzzle
-  // needs, used to grade difficulty.
+  // closest to solved, by moves so far + BREAK_WEIGHT × the places where a tube
+  // changes colour (each move can remove at most one of those). Returns the
+  // moves (or null if none was found within `limit` explored positions) and how
+  // many positions it explored: a measure of how much trial and error the
+  // puzzle needs, used to grade difficulty.
   // Internally each tube is a short string (one letter per block), which is
   // much faster to copy and compare than arrays.
   function solve(state, limit, rules) {
     limit = limit || 200000;
     const cap = capOf(rules), mix = !!(rules && rules.mix);
-    const W = 6;
+    const BREAK_WEIGHT = 6;
     // Tubes are interchangeable, so the key lists them in sorted order
     // (insertion sort: faster than Array#sort for a dozen short strings).
-    const keyOf = (s) => {
-      const a = s.slice();
-      for (let i = 1; i < a.length; i++) {
-        const v = a[i];
+    const keyOf = (tubes) => {
+      const sorted = tubes.slice();
+      for (let i = 1; i < sorted.length; i++) {
+        const tube = sorted[i];
         let j = i;
-        for (; j > 0 && a[j - 1] > v; j--) a[j] = a[j - 1];
-        a[j] = v;
+        for (; j > 0 && sorted[j - 1] > tube; j--) sorted[j] = sorted[j - 1];
+        sorted[j] = tube;
       }
-      return a.join('|');
+      return sorted.join('|');
     };
     // Places where a tube changes colour; 0 means solved.
-    const breaks = (s) => {
-      let n = 0;
-      for (const t of s) for (let k = 1; k < t.length; k++) if (t[k] !== t[k - 1]) n++;
-      return n;
+    const breaks = (tubes) => {
+      let count = 0;
+      for (const tube of tubes) for (let k = 1; k < tube.length; k++) if (tube[k] !== tube[k - 1]) count++;
+      return count;
     };
-    // Each child position with the move that leads to it.
-    function children(s) {
+    // Each position reachable in one move, with the move that leads to it.
+    function children(tubes) {
       const out = [];
       const sources = [];   // short lists: faster than Sets at this size
-      for (let i = 0; i < s.length; i++) {
-        const a = s[i];
-        if (!a || sources.includes(a)) continue;   // a tube identical to one already tried
-        sources.push(a);
-        const c = a[a.length - 1];
+      for (let from = 0; from < tubes.length; from++) {
+        const source = tubes[from];
+        if (!source || sources.includes(source)) continue;   // a tube identical to one already tried
+        sources.push(source);
+        const colour = source[source.length - 1];
         let run = 1;
-        while (run < a.length && a[a.length - 1 - run] === c) run++;
-        const uniform = run === a.length;
+        while (run < source.length && source[source.length - 1 - run] === colour) run++;
+        const uniform = run === source.length;
         const targets = [];
-        for (let j = 0; j < s.length; j++) {
-          const b = s[j];
-          if (j === i || b.length >= cap || targets.includes(b)) continue;
-          if (b && b[b.length - 1] !== c && !mix) continue;
-          if (!b && uniform) continue;          // pointless: just moves a sorted tube
-          targets.push(b);
-          const n = Math.min(run, cap - b.length);
-          const next = s.slice();
-          next[i] = a.slice(0, a.length - n);
-          next[j] = b + a.slice(a.length - n);
-          out.push([next, [i, j]]);
+        for (let to = 0; to < tubes.length; to++) {
+          const target = tubes[to];
+          if (to === from || target.length >= cap || targets.includes(target)) continue;
+          if (target && target[target.length - 1] !== colour && !mix) continue;
+          if (!target && uniform) continue;          // pointless: just moves a sorted tube
+          targets.push(target);
+          const count = Math.min(run, cap - target.length);
+          const next = tubes.slice();
+          next[from] = source.slice(0, source.length - count);
+          next[to] = target + source.slice(source.length - count);
+          out.push([next, [from, to]]);
         }
       }
       return out;
     }
 
-    const start = state.map((t) => t.map((c) => String.fromCharCode(97 + c)).join(''));
+    const start = state.map((tube) => tube.map((colour) => String.fromCharCode(97 + colour)).join(''));
     if (!breaks(start)) return { moves: [], unsolvable: false, explored: 0 };
     const seen = new Set([keyOf(start)]);
     const heap = Heap();
     let order = 0, explored = 0;
-    heap.push([W * breaks(start), order++, { s: start, g: 0, path: null }]);
+    heap.push([BREAK_WEIGHT * breaks(start), order++, { tubes: start, movesSoFar: 0, path: null }]);
     while (heap.size) {
       const node = heap.pop()[2];
       if (++explored > limit) return { moves: null, unsolvable: false, explored };
-      for (const [s, move] of children(node.s)) {
-        const size = seen.size;
-        seen.add(keyOf(s));       // one lookup: the size only grows for a new position
-        if (seen.size === size) continue;
+      for (const [tubes, move] of children(node.tubes)) {
+        const seenBefore = seen.size;
+        seen.add(keyOf(tubes));       // one lookup: the size only grows for a new position
+        if (seen.size === seenBefore) continue;
         const path = { move, prev: node.path };
-        const h = breaks(s);
-        if (!h) {
+        const left = breaks(tubes);
+        if (!left) {
           const out = [];
-          for (let p = path; p; p = p.prev) out.push(p.move);
+          for (let step = path; step; step = step.prev) out.push(step.move);
           return { moves: out.reverse(), unsolvable: false, explored };
         }
-        heap.push([node.g + 1 + W * h, order++, { s, g: node.g + 1, path }]);
+        heap.push([node.movesSoFar + 1 + BREAK_WEIGHT * left, order++, { tubes, movesSoFar: node.movesSoFar + 1, path }]);
       }
     }
     // Every reachable position was checked.
@@ -206,10 +200,10 @@
   // into very long sliding-puzzle shuffles.
   const minEmptyNoExtra = (cap) => (cap <= 4 ? 1 : 2);
 
-  function deal(colors, extra, per) {
-    const blocks = shuffle([].concat(...[...Array(colors).keys()].map((c) => Array(per).fill(c))));
+  function deal(colours, extra, perColour) {
+    const blocks = shuffle([].concat(...[...Array(colours).keys()].map((colour) => Array(perColour).fill(colour))));
     const state = [];
-    for (let t = 0; t < colors; t++) state.push(blocks.slice(t * per, (t + 1) * per));
+    for (let t = 0; t < colours; t++) state.push(blocks.slice(t * perColour, (t + 1) * perColour));
     for (let t = 0; t < extra; t++) state.push([]);
     return state;
   }
@@ -219,28 +213,28 @@
   // deal) or one of LEVELS. For a level, several solvable deals are compared
   // by how much searching the solver needed, and one is taken from the
   // matching quarter: easiest quarter for 'easy' up to hardest for 'expert'.
-  function generate(colors, extra, opts) {
+  function generate(colours, extra, opts) {
     opts = opts || {};
     const rules = { cap: capOf(opts), mix: !!opts.mix };
-    const per = rules.cap - (opts.empty || 0);   // blocks of each colour
+    const perColour = rules.cap - (opts.empty || 0);
     const level = LEVELS.indexOf(opts.level);
     const want = level < 0 ? 1 : 24;           // solvable deals to compare
-    const budget = Date.now() + 1000;          // stop comparing after this
+    const deadline = Date.now() + 1000;        // stop comparing after this
     const found = [];
     for (let attempt = 0; attempt < 500 && found.length < want; attempt++) {
-      if (found.length && Date.now() > budget) break;
-      const state = deal(colors, extra, per);
+      if (found.length && Date.now() > deadline) break;
+      const state = deal(colours, extra, perColour);
       // Avoid deals where a tube already starts sorted.
-      if (state.some((t) => t.length && t.every((c) => c === t[0]))) continue;
+      if (state.some((tube) => tube.length && tube.every((colour) => colour === tube[0]))) continue;
       const result = solve(state, 20000, rules);
       if (result.moves) found.push({ state, score: result.explored + result.moves.length });
     }
     if (!found.length) throw new Error('Could not generate a puzzle');
     if (level < 0) return found[0].state;
     found.sort((x, y) => x.score - y.score);
-    const lo = Math.floor(found.length * level / LEVELS.length);
-    const hi = Math.max(lo + 1, Math.floor(found.length * (level + 1) / LEVELS.length));
-    return found[lo + Math.floor(Math.random() * (hi - lo))].state;
+    const low = Math.floor(found.length * level / LEVELS.length);
+    const high = Math.max(low + 1, Math.floor(found.length * (level + 1) / LEVELS.length));
+    return found[low + randomInt(high - low)].state;
   }
 
   const api = {

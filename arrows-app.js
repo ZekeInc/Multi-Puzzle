@@ -117,9 +117,9 @@
   function geometry(p) {
     const n = state.size, len = p.cells.length;
     const at = (i) => [i % n + 0.5, Math.floor(i / n) + 0.5];
-    const unit = (d) => [Arrows.DC[d], Arrows.DR[d]];
+    const unit = (d) => [Arrows.COLUMN_STEP[d], Arrows.ROW_STEP[d]];
     const tail = p.cells[len - 1];
-    const back = unit(len > 1 ? Arrows.stepDir(tail, p.cells[len - 2], n) : p.dir);
+    const back = unit(len > 1 ? Arrows.stepDirection(tail, p.cells[len - 2], n) : p.dir);
     const [hx, hy] = at(p.cells[0]);
     const [ux, uy] = unit(p.dir);
     const toEdge = ux > 0 ? n - hx : ux < 0 ? hx : uy > 0 ? n - hy : hy;
@@ -257,7 +257,7 @@
     el.getBoundingClientRect();   // start the transition from where it is now
     for (const pl of el.querySelectorAll('polyline')) pl.style.strokeDashoffset = Number(pl.dataset.offset) - travel;
     el.querySelector('.a-head').style.transform =
-      `translate(${Arrows.DC[p.dir] * travel}px, ${Arrows.DR[p.dir] * travel}px)`;
+      `translate(${Arrows.COLUMN_STEP[p.dir] * travel}px, ${Arrows.ROW_STEP[p.dir] * travel}px)`;
     setTimeout(() => { if (state.removed[id]) el.classList.add('gone'); }, SLIDE_MS);
   }
 

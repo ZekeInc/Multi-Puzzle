@@ -6,6 +6,7 @@ const FILES = [
   './',
   'index.html',
   'style.css',
+  'shared.js',
   'sudoku.js',
   'app.js',
   'theme.js',

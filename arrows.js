@@ -1,4 +1,4 @@
-// Logic for "Arrows" mode: an N×N grid filled with arrow pieces.
+// Logic for "Arrows" mode: a size × size grid filled with arrow pieces.
 // Tapping a piece slides it off the board, head first, following its own path
 // like a snake, but only if every square straight ahead of its head, up to the
 // edge, is empty. Clear the whole board.
@@ -8,23 +8,30 @@
 // 0 up / 1 right / 2 down / 3 left. For a piece of 2+ squares the head points
 // straight on from the square behind it. On the flat board Easy pieces are
 // straight, and Medium and Hard pieces bend up to 3 times (Hard is built for
-// longer must-go-first chains); see FLAT_LEVELS.
+// longer must-go-first chains); see FLAT_LEVELS. (`cells` and `dir` are kept
+// short because saved games store them.)
 //
 // A board is { size, pieces }. Removing a piece only ever frees squares, so a
 // board can be cleared exactly when no pieces block each other in a loop, and
 // then taking off any free piece, again and again, always clears it.
 //
-// generate(n, level) takes level 'easy' | 'medium' | 'hard'. generateCube(n,
-// level) makes the 3D version: an n × n × n cube (see below).
+// generate(size, level) takes level 'easy' | 'medium' | 'hard'.
+// generateCube(size, level) makes the 3D version: a size × size × size cube
+// (see below).
 
 (function (root) {
   'use strict';
 
+  const { randomInt, shuffle } = typeof module !== 'undefined' && module.exports ? require('./shared.js') : root.Shared;
+
   // Directions: 0 up, 1 right, 2 down, 3 left, and on the 3D cube also
-  // 4 front (towards the player at the start) and 5 back.
-  const DR = [-1, 0, 1, 0, 0, 0];
-  const DC = [0, 1, 0, -1, 0, 0];
-  const DZ = [0, 0, 0, 0, 1, -1];
+  // 4 front (towards the player at the start) and 5 back. One step in each
+  // direction changes the row, column and layer by:
+  const ROW_STEP = [-1, 0, 1, 0, 0, 0];
+  const COLUMN_STEP = [0, 1, 0, -1, 0, 0];
+  const LAYER_STEP = [0, 0, 0, 0, 1, -1];
+  const FLAT_DIRECTIONS = [0, 1, 2, 3];
+  const CUBE_DIRECTIONS = [0, 1, 2, 3, 4, 5];
   const LEVELS = ['easy', 'medium', 'hard'];
 
   // Piece shapes: most bends in one piece, how likely each length is (weights
@@ -35,9 +42,12 @@
     bend1: { bends: 1, weights: [1, 3, 4, 4], turn: 0.7 },
     bend3: { bends: 3, weights: [1, 2, 3, 3, 3, 3], turn: 0.8 },
     bend3short: { bends: 3, weights: [1, 4, 4, 3], turn: 0.85 },   // more pieces, so more in each other's way
-    // Hard: short pieces plus one long winding one, N − 2 to N + 2 squares on
-    // an N × N board with up to 5 bends.
-    hard: { bends: 3, weights: [1, 4, 4, 3], turn: 0.85, long: (n) => ({ count: 1, min: n - 2, max: n + 2, bends: 5 }) },
+    // Hard: short pieces plus one long winding one, size − 2 to size + 2
+    // squares with up to 5 bends.
+    hard: {
+      bends: 3, weights: [1, 4, 4, 3], turn: 0.85,
+      long: (size) => ({ count: 1, min: size - 2, max: size + 2, bends: 5 }),
+    },
   };
 
   // Flat board levels: the piece shape, how many boards to deal, the lowest
@@ -54,73 +64,100 @@
     hard: { shape: 'hard', deals: 40, minGreed: 0.6, chains: 'moves', pick: 'moves', flips: 20 },
   };
 
-  // Is square i off the outer ring of an n × n board (any layer)?
-  function insideRing(i, n) {
-    const r = Math.floor(i / n) % n, c = i % n;
-    return r > 0 && r < n - 1 && c > 0 && c < n - 1;
+  // ---------- Squares ----------
+  // A square's index is (layer × size + row) × size + column; a flat board is
+  // layer 0 only (depth 1), a cube has `depth` = size layers.
+
+  function coordinatesOf(square, size) {
+    return {
+      layer: Math.floor(square / (size * size)),
+      row: Math.floor(square / size) % size,
+      column: square % size,
+    };
   }
 
-  function bitCount(bits) {
-    let count = 0;
-    for (let w of bits) for (; w; w &= w - 1) count++;
-    return count;
+  // Is the square off the outer ring of the board (in any layer)?
+  function insideRing(square, size) {
+    const { row, column } = coordinatesOf(square, size);
+    return row > 0 && row < size - 1 && column > 0 && column < size - 1;
   }
 
-  function randInt(n) {
-    return Math.floor(Math.random() * n);
-  }
-
-  function shuffle(arr) {
-    for (let i = arr.length - 1; i > 0; i--) {
-      const j = randInt(i + 1);
-      [arr[i], arr[j]] = [arr[j], arr[i]];
+  // Rays: rays[square × 6 + dir] lists the squares straight ahead of `square`
+  // in direction `dir`, nearest first, up to the edge. Worked out once per
+  // board shape and kept: the generators use them in their innermost loops.
+  const raysCache = new Map();
+  let lastKey = -1, lastRays = null;   // the shape asked for last: nearly always the same one
+  function raysFor(size, depth) {
+    const key = size * 1000 + depth;
+    if (key === lastKey) return lastRays;
+    lastKey = key;
+    if (raysCache.has(key)) return (lastRays = raysCache.get(key));
+    const rays = [];
+    for (let square = 0; square < size * size * depth; square++) {
+      for (let dir = 0; dir < 6; dir++) {
+        const ray = [];
+        let { layer, row, column } = coordinatesOf(square, size);
+        for (;;) {
+          layer += LAYER_STEP[dir]; row += ROW_STEP[dir]; column += COLUMN_STEP[dir];
+          if (row < 0 || row >= size || column < 0 || column >= size || layer < 0 || layer >= depth) break;
+          ray.push((layer * size + row) * size + column);
+        }
+        rays.push(ray);
+      }
     }
-    return arr;
+    raysCache.set(key, rays);
+    return (lastRays = rays);
   }
+  const squaresAhead = (square, dir, size, depth) => raysFor(size, depth)[square * 6 + dir];
 
-  // Direction of the step from square a to its neighbour b.
-  function stepDir(a, b, n) {
-    const d = b - a;
-    return d === -n ? 0 : d === 1 ? 1 : d === n ? 2 : d === -1 ? 3 : d === n * n ? 4 : 5;
+  // Direction of the step from a square to its neighbour.
+  function stepDirection(from, to, size) {
+    const difference = to - from;
+    return difference === -size ? 0 : difference === 1 ? 1 : difference === size ? 2
+      : difference === -1 ? 3 : difference === size * size ? 4 : 5;
   }
 
   // Number of bends along a piece's path.
-  function bends(p, n) {
+  function bends(piece, size) {
+    const path = piece.cells;
     let count = 0;
-    for (let k = 2; k < p.cells.length; k++) {
-      if (stepDir(p.cells[k], p.cells[k - 1], n) !== stepDir(p.cells[k - 1], p.cells[k - 2], n)) count++;
+    for (let k = 2; k < path.length; k++) {
+      if (stepDirection(path[k], path[k - 1], size) !== stepDirection(path[k - 1], path[k - 2], size)) count++;
     }
     return count;
   }
 
   // A piece from before pieces could bend: { r, c, len, dir } (head at r, c).
-  function fromStraight(p, n) {
+  function fromStraight(oldPiece, size) {
     const cells = [];
-    for (let k = 0; k < p.len; k++) cells.push((p.r - DR[p.dir] * k) * n + (p.c - DC[p.dir] * k));
-    return { cells, dir: p.dir };
+    for (let k = 0; k < oldPiece.len; k++) {
+      cells.push((oldPiece.r - ROW_STEP[oldPiece.dir] * k) * size + (oldPiece.c - COLUMN_STEP[oldPiece.dir] * k));
+    }
+    return { cells, dir: oldPiece.dir };
   }
 
-  // owner[square] = piece index, or -1 for an empty square. A 3D cube has
-  // `depth` = size layers; square index = (layer × size + row) × size + column,
-  // so a flat board (depth 1) is layer 0.
+  // owner[square] = id of the piece on it, or -1 for an empty square.
   function ownerGrid(board) {
     const owner = new Int16Array(board.size * board.size * (board.depth || 1)).fill(-1);
-    board.pieces.forEach((p, id) => { for (const i of p.cells) owner[i] = id; });
+    board.pieces.forEach((piece, id) => { for (const square of piece.cells) owner[square] = id; });
     return owner;
   }
+
+  function bitCount(bits) {
+    let count = 0;
+    for (let word of bits) for (; word; word &= word - 1) count++;
+    return count;
+  }
+
+  // ---------- Playing ----------
 
   // First piece in the way of piece `id` (nearest its head), or -1 if its path
   // to the edge is clear. `removed[id]` marks pieces already off the board.
   function blocker(board, owner, removed, id) {
-    const n = board.size, depth = board.depth || 1, p = board.pieces[id], head = p.cells[0];
-    let z = Math.floor(head / (n * n)) + DZ[p.dir];
-    let r = Math.floor(head / n) % n + DR[p.dir], c = head % n + DC[p.dir];
-    while (r >= 0 && r < n && c >= 0 && c < n && z >= 0 && z < depth) {
-      const o = owner[(z * n + r) * n + c];
-      if (o >= 0 && !removed[o]) return o;
-      r += DR[p.dir];
-      c += DC[p.dir];
-      z += DZ[p.dir];
+    const piece = board.pieces[id];
+    for (const square of squaresAhead(piece.cells[0], piece.dir, board.size, board.depth || 1)) {
+      const other = owner[square];
+      if (other >= 0 && !removed[other]) return other;
     }
     return -1;
   }
@@ -130,7 +167,7 @@
     owner = owner || ownerGrid(board);
     removed = removed || [];
     const out = [];
-    board.pieces.forEach((p, id) => {
+    board.pieces.forEach((piece, id) => {
       if (!removed[id] && blocker(board, owner, removed, id) < 0) out.push(id);
     });
     return out;
@@ -140,13 +177,13 @@
   // other in a loop. Works from any position (`removed` marks pieces already off).
   function solve(board, removed) {
     const owner = ownerGrid(board);
-    const off = board.pieces.map((p, id) => !!(removed && removed[id]));
-    let left = off.filter((x) => !x).length;
+    const off = board.pieces.map((piece, id) => !!(removed && removed[id]));
+    let left = off.filter((isOff) => !isOff).length;
     const order = [];
     while (left) {
-      const f = free(board, off, owner);
-      if (!f.length) return null;
-      for (const id of f) { off[id] = true; order.push(id); left--; }
+      const freeNow = free(board, off, owner);
+      if (!freeNow.length) return null;
+      for (const id of freeNow) { off[id] = true; order.push(id); left--; }
     }
     return order;
   }
@@ -155,30 +192,42 @@
 
   function pickLength(weights) {
     let total = 0;
-    for (const w of weights) total += w;
-    let x = Math.random() * total;
+    for (const weight of weights) total += weight;
+    let roll = Math.random() * total;
     for (let k = 0; k < weights.length; k++) {
-      x -= weights[k];
-      if (x < 0) return k + 1;
+      roll -= weights[k];
+      if (roll < 0) return k + 1;
     }
     return weights.length;
+  }
+
+  // With chance `greed` one of the moves scoring highest by `score` (a random
+  // one among equals), otherwise any random move.
+  function pickMove(moves, greed, score) {
+    if (Math.random() < greed) {
+      let best = -Infinity;
+      for (const move of moves) best = Math.max(best, score(move));
+      const top = moves.filter((move) => score(move) === best);
+      return top[randomInt(top.length)];
+    }
+    return moves[randomInt(moves.length)];
   }
 
   // Split the grid into pieces: paths of squares that grow from a random
   // starting square, at either end, up to a random length and at most
   // `maxBends` bends. Returns a list of paths (end to end).
-  // On the cube (depth n) paths can also run between layers.
-  function tile(n, shape, depth = 1) {
-    const taken = new Uint8Array(n * n * depth);
+  // On the cube (depth = size) paths can also run between layers.
+  function tile(size, shape, depth = 1) {
+    const taken = new Uint8Array(size * size * depth);
     const paths = [];
-    const neighbours = (i) => {
-      const z = Math.floor(i / (n * n)), r = Math.floor(i / n) % n, c = i % n, out = [];
-      if (r > 0) out.push(i - n);
-      if (c < n - 1) out.push(i + 1);
-      if (r < n - 1) out.push(i + n);
-      if (c > 0) out.push(i - 1);
-      if (z < depth - 1) out.push(i + n * n);
-      if (z > 0) out.push(i - n * n);
+    const neighbours = (square) => {
+      const { layer, row, column } = coordinatesOf(square, size), out = [];
+      if (row > 0) out.push(square - size);
+      if (column < size - 1) out.push(square + 1);
+      if (row < size - 1) out.push(square + size);
+      if (column > 0) out.push(square - 1);
+      if (layer < depth - 1) out.push(square + size * size);
+      if (layer > 0) out.push(square - size * size);
       return out;
     };
     // Grow a path from `start` up to `want` squares with at most `maxBends`
@@ -188,48 +237,49 @@
       taken[start] = 1;
       let turns = 0;
       while (path.length < want) {
-        const options = [];   // [atEnd, square, bends]
+        const options = [];   // { atEnd, square, turn }
         for (const atEnd of [false, true]) {
           const end = atEnd ? path[path.length - 1] : path[0];
-          const prev = path.length > 1 ? (atEnd ? path[path.length - 2] : path[1]) : -1;
+          const behind = path.length > 1 ? (atEnd ? path[path.length - 2] : path[1]) : -1;
           for (const next of neighbours(end)) {
             if (taken[next]) continue;
-            const turn = prev >= 0 && stepDir(prev, end, n) !== stepDir(end, next, n) ? 1 : 0;
-            if (turns + turn <= maxBends) options.push([atEnd, next, turn]);
+            const turn = behind >= 0 && stepDirection(behind, end, size) !== stepDirection(end, next, size) ? 1 : 0;
+            if (turns + turn <= maxBends) options.push({ atEnd, square: next, turn });
           }
         }
         if (!options.length) break;
         // Where a bend is allowed, take one `shape.turn` of the time.
-        const turning = options.filter((o) => o[2]), straight = options.filter((o) => !o[2]);
-        const pool = turning.length && (!straight.length || Math.random() < shape.turn) ? turning : straight;
-        const [atEnd, next, turn] = pool[randInt(pool.length)];
-        if (atEnd) path.push(next); else path.unshift(next);
-        taken[next] = 1;
-        turns += turn;
+        const turning = options.filter((option) => option.turn);
+        const straightOn = options.filter((option) => !option.turn);
+        const choices = turning.length && (!straightOn.length || Math.random() < shape.turn) ? turning : straightOn;
+        const chosen = choices[randomInt(choices.length)];
+        if (chosen.atEnd) path.push(chosen.square); else path.unshift(chosen.square);
+        taken[chosen.square] = 1;
+        turns += chosen.turn;
       }
       return path;
     }
 
-    // A few long pieces first (`shape.long`: { count, min, max, bends } per
-    // board size n). A long piece's head may not be on the outer ring of the
+    // A few long pieces first (`shape.long`: { count, min, max, bends } for the
+    // board size). A long piece's head may not be on the outer ring of the
     // board, so it can't simply leave from the edge: grow it again (from
     // another inside square) until at least one end is inside and it is long
     // enough. generateOne() then only points it with an inside end as the head.
-    const inside = (i) => insideRing(i, n);
-    const long = shape.long ? shape.long(n) : null;
+    const inside = (square) => insideRing(square, size);
+    const long = shape.long ? shape.long(size) : null;
     for (let k = 0; long && k < long.count; k++) {
-      const inner = [...Array(n * n * depth).keys()].filter((i) => inside(i) && !taken[i]);
-      for (let attempt = 0; attempt < 200 && inner.length; attempt++) {
-        const want = long.min + randInt(long.max - long.min + 1);
-        const path = grow(inner[randInt(inner.length)], want, long.bends);
+      const innerSquares = [...Array(size * size * depth).keys()].filter((square) => inside(square) && !taken[square]);
+      for (let attempt = 0; attempt < 200 && innerSquares.length; attempt++) {
+        const want = long.min + randomInt(long.max - long.min + 1);
+        const path = grow(innerSquares[randomInt(innerSquares.length)], want, long.bends);
         if (path.length >= long.min && (inside(path[0]) || inside(path[path.length - 1]))) {
           paths.push(path);
           break;
         }
-        for (const i of path) taken[i] = 0;   // try again
+        for (const square of path) taken[square] = 0;   // try again
       }
     }
-    for (const start of shuffle([...Array(n * n * depth).keys()])) {
+    for (const start of shuffle([...Array(size * size * depth).keys()])) {
       if (taken[start]) continue;
       paths.push(grow(start, pickLength(shape.weights), shape.bends));
     }
@@ -238,12 +288,14 @@
 
   // The ways a path can become a piece: either end can be the head, pointing
   // straight on (a single square can point any way).
-  function orientations(path, n, depth = 1) {
-    if (path.length === 1) return (depth > 1 ? [0, 1, 2, 3, 4, 5] : [0, 1, 2, 3]).map((dir) => ({ cells: path.slice(), dir }));
-    const fwd = path.slice().reverse();   // head = last square of path
+  function orientations(path, size, depth = 1) {
+    if (path.length === 1) {
+      return (depth > 1 ? CUBE_DIRECTIONS : FLAT_DIRECTIONS).map((dir) => ({ cells: path.slice(), dir }));
+    }
+    const reversed = path.slice().reverse();   // head = last square of path
     return [
-      { cells: fwd, dir: stepDir(fwd[1], fwd[0], n) },
-      { cells: path.slice(), dir: stepDir(path[1], path[0], n) },
+      { cells: reversed, dir: stepDirection(reversed[1], reversed[0], size) },
+      { cells: path.slice(), dir: stepDirection(path[1], path[0], size) },
     ];
   }
 
@@ -254,102 +306,91 @@
   // never get stuck; bent ones rarely can, and then the deal is thrown away.)
   // `greed` (0–1) is how often the best move is taken instead of a random one:
   // the one with the longest clear path (long paths over pieces that went first
-  // make more pieces wait on others), or with `chains`, the one that makes the
-  // longest chain of pieces that must go first.
-  function generateOne(n, shape, greed, depth = 1, chains = false) {
-    const paths = tile(n, SHAPES[shape], depth);
-    const owner = new Int16Array(n * n * depth).fill(-1);
-    paths.forEach((sq, id) => { for (const i of sq) owner[i] = id; });
-    const off = new Array(paths.length).fill(false);
+  // make more pieces wait on others), with `chains` the one that makes the
+  // longest chain of pieces that must go first, or with `chains: 'moves'` the
+  // one that needs the most moves before it can go.
+  function generateOne(size, shapeName, greed, depth = 1, chains = false) {
+    const shape = SHAPES[shapeName];
+    const paths = tile(size, shape, depth);
+    const owner = new Int16Array(size * size * depth).fill(-1);
+    paths.forEach((path, id) => { for (const square of path) owner[square] = id; });
+    const lifted = new Array(paths.length).fill(false);
     const pieces = new Array(paths.length);
-    const options = paths.map((sq) => orientations(sq, n, depth));
+    const options = paths.map((path) => orientations(path, size, depth));
     // Long pieces (grown first, so ids 0 .. count − 1) keep their head off the outer ring.
-    const longCount = SHAPES[shape].long ? SHAPES[shape].long(n).count : 0;
+    const longCount = shape.long ? shape.long(size).count : 0;
     for (let id = 0; id < longCount && id < options.length; id++) {
-      options[id] = options[id].filter((p) => insideRing(p.cells[0], n));
+      options[id] = options[id].filter((piece) => insideRing(piece.cells[0], size));
     }
-    const chain = new Array(paths.length).fill(0);   // longest must-go-first chain ending at each piece
+    const chainLength = new Array(paths.length).fill(0);   // longest must-go-first chain ending at each piece
     const words = (paths.length + 31) >> 5;
-    const before = paths.map(() => new Uint32Array(words));   // pieces that must go before each piece (bits)
+    const mustGoFirst = paths.map(() => new Uint32Array(words));   // pieces that must go before each piece (bits)
+    const rays = raysFor(size, depth);
+    const score = chains === 'moves' ? (move) => move.movesNeeded
+      : chains ? (move) => move.chainLength : (move) => move.clearLength;
     for (let left = paths.length; left; left--) {
-      const moves = [];   // [id, piece, path length, chain depth, moves needed first]
-      options.forEach((opts, id) => {
-        if (off[id]) return;
-        for (const p of opts) {
-          const head = p.cells[0];
-          let z = Math.floor(head / (n * n)) + DZ[p.dir];
-          let r = Math.floor(head / n) % n + DR[p.dir], c = head % n + DC[p.dir], len = 0, clear = true, deep = 0;
+      const moves = [];
+      options.forEach((pieceOptions, id) => {
+        if (lifted[id]) return;
+        for (const piece of pieceOptions) {
+          let clear = true, clearLength = 0, longestBefore = 0;
           const crossed = new Set();
-          while (r >= 0 && r < n && c >= 0 && c < n && z >= 0 && z < depth) {
-            const o = owner[(z * n + r) * n + c];
-            if (o >= 0 && !off[o]) { clear = false; break; }
-            if (o >= 0) { deep = Math.max(deep, chain[o]); crossed.add(o); }
-            r += DR[p.dir]; c += DC[p.dir]; z += DZ[p.dir]; len++;
+          for (const square of rays[piece.cells[0] * 6 + piece.dir]) {
+            const other = owner[square];
+            if (other >= 0 && !lifted[other]) { clear = false; break; }
+            if (other >= 0) { longestBefore = Math.max(longestBefore, chainLength[other]); crossed.add(other); }
+            clearLength++;
           }
-          if (clear) {
-            // Every piece that must go before this one: those in its way, and theirs.
-            const need = new Uint32Array(words);
-            for (const o of crossed) {
-              need[o >> 5] |= 1 << (o & 31);
-              for (let w = 0; w < words; w++) need[w] |= before[o][w];
-            }
-            moves.push([id, p, len, deep + 1, bitCount(need), need]);
+          if (!clear) continue;
+          // Every piece that must go before this one: those in its way, and theirs.
+          const before = new Uint32Array(words);
+          for (const other of crossed) {
+            before[other >> 5] |= 1 << (other & 31);
+            for (let w = 0; w < words; w++) before[w] |= mustGoFirst[other][w];
           }
-          crossed.clear();
+          moves.push({ id, piece, clearLength, chainLength: longestBefore + 1, movesNeeded: bitCount(before), before });
         }
       });
       if (!moves.length) return null;
-      let m;
-      const key = chains === 'moves' ? 4 : chains ? 3 : 2;
-      if (Math.random() < greed) {
-        const best = Math.max(...moves.map((x) => x[key]));
-        const top = moves.filter((x) => x[key] === best);
-        m = top[randInt(top.length)];
-      } else {
-        m = moves[randInt(moves.length)];
-      }
-      pieces[m[0]] = m[1];
-      chain[m[0]] = m[3];
-      before[m[0]] = m[5];
-      off[m[0]] = true;
+      const move = pickMove(moves, greed, score);
+      pieces[move.id] = move.piece;
+      chainLength[move.id] = move.chainLength;
+      mustGoFirst[move.id] = move.before;
+      lifted[move.id] = true;
     }
-    return longCount ? { size: n, depth, pieces, longCount } : { size: n, depth, pieces };
+    return longCount ? { size, depth, pieces, longCount } : { size, depth, pieces };
   }
 
   // How many moves each piece needs before it can go: every piece in its way,
   // and every piece in their way, and so on. Returns the average over all
   // pieces and the most for one piece. This is what Hard is built for.
   function movesFirst(board) {
-    const n = board.size, depth = board.depth || 1, owner = ownerGrid(board);
+    const depth = board.depth || 1, owner = ownerGrid(board);
     const count = board.pieces.length, words = (count + 31) >> 5;
-    const direct = board.pieces.map((p) => {
-      const out = new Set(), head = p.cells[0];
-      let z = Math.floor(head / (n * n)) + DZ[p.dir];
-      let r = Math.floor(head / n) % n + DR[p.dir], c = head % n + DC[p.dir];
-      while (r >= 0 && r < n && c >= 0 && c < n && z >= 0 && z < depth) {
-        const o = owner[(z * n + r) * n + c];
-        if (o >= 0) out.add(o);
-        r += DR[p.dir]; c += DC[p.dir]; z += DZ[p.dir];
+    const inTheWay = board.pieces.map((piece) => {
+      const found = new Set();
+      for (const square of squaresAhead(piece.cells[0], piece.dir, board.size, depth)) {
+        if (owner[square] >= 0) found.add(owner[square]);
       }
-      return out;
+      return found;
     });
     const memo = new Array(count);
-    const need = (id) => {
+    const allBefore = (id) => {
       if (memo[id]) return memo[id];
       const bits = new Uint32Array(words);
       memo[id] = bits;   // (no loops on a solvable board)
-      for (const o of direct[id]) {
-        bits[o >> 5] |= 1 << (o & 31);
-        const theirs = need(o);
+      for (const other of inTheWay[id]) {
+        bits[other >> 5] |= 1 << (other & 31);
+        const theirs = allBefore(other);
         for (let w = 0; w < words; w++) bits[w] |= theirs[w];
       }
       return bits;
     };
     let sum = 0, most = 0;
     for (let id = 0; id < count; id++) {
-      const k = bitCount(need(id));
-      sum += k;
-      most = Math.max(most, k);
+      const needed = bitCount(allBefore(id));
+      sum += needed;
+      most = Math.max(most, needed);
     }
     return { avg: sum / count, most };
   }
@@ -358,20 +399,20 @@
   // other end becomes the head; a single square turns), and keep the change if
   // the board can still be cleared and pieces need at least as many moves first.
   function improve(board, tries, goal = Infinity) {
-    const n = board.size;
+    const size = board.size;
     let best = movesFirst(board).avg;
     for (let t = 0; t < tries && best < goal; t++) {
-      const id = randInt(board.pieces.length), old = board.pieces[id];
-      let next;
+      const id = randomInt(board.pieces.length), old = board.pieces[id];
+      let flipped;
       if (old.cells.length === 1) {
-        const dirs = (board.depth > 1 ? [0, 1, 2, 3, 4, 5] : [0, 1, 2, 3]).filter((d) => d !== old.dir);
-        next = { cells: old.cells, dir: dirs[randInt(dirs.length)] };
+        const dirs = (board.depth > 1 ? CUBE_DIRECTIONS : FLAT_DIRECTIONS).filter((dir) => dir !== old.dir);
+        flipped = { cells: old.cells, dir: dirs[randomInt(dirs.length)] };
       } else {
         const cells = old.cells.slice().reverse();
-        next = { cells, dir: stepDir(cells[1], cells[0], n) };
+        flipped = { cells, dir: stepDirection(cells[1], cells[0], size) };
       }
-      if (id < (board.longCount || 0) && !insideRing(next.cells[0], n)) continue;   // long heads stay inside
-      board.pieces[id] = next;
+      if (id < (board.longCount || 0) && !insideRing(flipped.cells[0], size)) continue;   // long heads stay inside
+      board.pieces[id] = flipped;
       if (solve(board)) {
         const score = movesFirst(board).avg;
         if (score >= best) { best = score; continue; }
@@ -392,109 +433,101 @@
     {
       const off = new Array(total).fill(false);
       for (let left = total; left;) {
-        const f = free(board, off, owner);
-        if (!f.length) return null;
-        for (const id of f) off[id] = true;
-        left -= f.length;
+        const freeNow = free(board, off, owner);
+        if (!freeNow.length) return null;
+        for (const id of freeNow) off[id] = true;
+        left -= freeNow.length;
         layers++;
       }
     }
     let sum = 0;
     const off = new Array(total).fill(false);
     for (let left = total; left; left--) {
-      const f = free(board, off, owner);
-      sum += f.length / left;
-      off[f[0]] = true;
+      const freeNow = free(board, off, owner);
+      sum += freeNow.length / left;
+      off[freeNow[0]] = true;
     }
     const tight = 1 - sum / total;
     return { layers, tight, score: layers + 10 * tight };
   }
 
   // Deal boards for a level (FLAT_LEVELS; 1 s budget, at least 3) with greed
-  // spread from its lowest to 1, and keep the hardest (Easy and Medium by
-  // grade(), Hard by movesFirst()). Easy: straight pieces. Medium: up to 3
-  // bends, as many moves needed first as Easy (see `match`). Hard: shorter pieces with up to 3 bends and one
-  // long one (N ± 2 squares, up to 5 bends), built so
-  // pieces need as many moves as possible before they can go, the hardest of
-  // 40 deals by that count, then improve()d.
+  // spread from its lowest to 1, and keep the hardest (Easy by grade(), Hard by
+  // movesFirst()). Easy: straight pieces. Medium: up to 3 bends, as many moves
+  // needed first as Easy (see `match`). Hard: shorter pieces with up to 3 bends
+  // and one long one (size ± 2 squares, up to 5 bends), built so pieces need as
+  // many moves as possible before they can go, the hardest of 40 deals by that
+  // count, then improve()d.
   const POOL = 12, BUDGET_MS = 1000;
 
-  function generate(n, level) {
+  function generate(size, level) {
     if (!LEVELS.includes(level)) level = 'medium';
-    const cfg = FLAT_LEVELS[level];
+    const settings = FLAT_LEVELS[level];
     const deadline = Date.now() + BUDGET_MS;
     let best = null, dealt = 0, goal = Infinity;
-    if (cfg.match) {
-      goal = (movesFirst(generate(n, cfg.match)).avg + movesFirst(generate(n, cfg.match)).avg) / 2;
+    if (settings.match) {
+      goal = (movesFirst(generate(size, settings.match)).avg + movesFirst(generate(size, settings.match)).avg) / 2;
     }
-    for (let tries = 0; dealt < cfg.deals && (dealt < 3 || Date.now() < deadline) && tries < cfg.deals * 4; tries++) {
-      const greed = cfg.minGreed + (1 - cfg.minGreed) * (dealt / (cfg.deals - 1));
-      const b = generateOne(n, cfg.shape, greed, 1, cfg.chains);
-      if (!b) continue;
+    for (let tries = 0; dealt < settings.deals && (dealt < 3 || Date.now() < deadline) && tries < settings.deals * 4; tries++) {
+      const greed = settings.minGreed + (1 - settings.minGreed) * (dealt / (settings.deals - 1));
+      const board = generateOne(size, settings.shape, greed, 1, settings.chains);
+      if (!board) continue;
       dealt++;
-      b.score = cfg.pick === 'moves' ? movesFirst(b).avg : grade(b).score;
-      if (cfg.match) b.score = -Math.abs(b.score - goal);   // closest to the goal wins
-      if (!best || b.score > best.score) best = b;
+      board.score = settings.pick === 'moves' ? movesFirst(board).avg : grade(board).score;
+      if (settings.match) board.score = -Math.abs(board.score - goal);   // closest to the goal wins
+      if (!best || board.score > best.score) best = board;
     }
     if (!best) throw new Error('Could not generate a puzzle');
-    if (cfg.flips) improve(best, cfg.flips * n * n, goal);
+    if (settings.flips) improve(best, settings.flips * size * size, goal);
     best.grade = grade(best);
     return Object.assign(best, { level });
   }
 
   // ---------- 3D cube ----------
-  // An n × n × n cube. Easy: single blocks, each pointing one of 6 ways.
-  // Medium and Hard: pieces like the flat board's (up to 1 / 3 bends), which
-  // can also run between layers. Built the same way as the flat board: play
-  // forwards, again and again lifting off a piece that has a clear way out
+  // A size × size × size cube. Easy: single blocks, each pointing one of 6
+  // ways. Medium and Hard: pieces like the flat board's (up to 1 / 3 bends),
+  // which can also run between layers. Built the same way as the flat board:
+  // play forwards, again and again lifting off a piece that has a clear way out
   // (single blocks never get stuck: one on the outside can leave through its
   // own face; bent pieces rarely can, and then the deal is thrown away).
   // Deals 12 (1 s budget, at least 3) with a spread of greed, ranks them by
   // grade() and takes the easiest (Easy), the middle one (Medium) or the
   // hardest (Hard).
 
-  function generateCubeOne(n, greed) {
-    const total = n * n * n;
-    const off = new Uint8Array(total);   // every square holds a block until lifted off
+  function generateCubeOne(size, greed) {
+    const total = size * size * size;
+    const lifted = new Uint8Array(total);   // every square holds a block until lifted off
     const pieces = new Array(total);
+    const rays = raysFor(size, size);
     for (let left = total; left; left--) {
-      const moves = [];   // [square, dir, clear distance]
-      for (let i = 0; i < total; i++) {
-        if (off[i]) continue;
-        const z0 = Math.floor(i / (n * n)), r0 = Math.floor(i / n) % n, c0 = i % n;
+      const moves = [];
+      for (let square = 0; square < total; square++) {
+        if (lifted[square]) continue;
         for (let dir = 0; dir < 6; dir++) {
-          let z = z0 + DZ[dir], r = r0 + DR[dir], c = c0 + DC[dir], len = 0, clear = true;
-          while (r >= 0 && r < n && c >= 0 && c < n && z >= 0 && z < n) {
-            if (!off[(z * n + r) * n + c]) { clear = false; break; }
-            z += DZ[dir]; r += DR[dir]; c += DC[dir]; len++;
-          }
-          if (clear) moves.push([i, dir, len]);
+          const ray = rays[square * 6 + dir];
+          let clearLength = 0;
+          while (clearLength < ray.length && lifted[ray[clearLength]]) clearLength++;
+          if (clearLength === ray.length) moves.push({ square, dir, clearLength });
         }
       }
-      let m;
-      if (Math.random() < greed) {
-        const best = Math.max(...moves.map((x) => x[2]));
-        const top = moves.filter((x) => x[2] === best);
-        m = top[randInt(top.length)];
-      } else {
-        m = moves[randInt(moves.length)];
-      }
-      pieces[m[0]] = { cells: [m[0]], dir: m[1] };
-      off[m[0]] = 1;
+      const move = pickMove(moves, greed, (m) => m.clearLength);
+      pieces[move.square] = { cells: [move.square], dir: move.dir };
+      lifted[move.square] = 1;
     }
-    return { size: n, depth: n, pieces };
+    return { size, depth: size, pieces };
   }
 
-  function generateCube(n, level) {
+  function generateCube(size, level) {
     if (!LEVELS.includes(level)) level = 'medium';
     const deadline = Date.now() + BUDGET_MS;
     const pool = [];
     for (let tries = 0; pool.length < POOL && (pool.length < 3 || Date.now() < deadline) && tries < 200; tries++) {
       const greed = pool.length / (POOL - 1);
-      const b = level === 'easy' ? generateCubeOne(n, greed) : generateOne(n, level === 'medium' ? 'bend1' : 'bend3', greed, n);
-      if (!b) continue;
-      b.grade = grade(b);
-      pool.push(b);
+      const board = level === 'easy' ? generateCubeOne(size, greed)
+        : generateOne(size, level === 'medium' ? 'bend1' : 'bend3', greed, size);
+      if (!board) continue;
+      board.grade = grade(board);
+      pool.push(board);
     }
     if (!pool.length) throw new Error('Could not generate a puzzle');
     pool.sort((a, b) => a.grade.score - b.grade.score);
@@ -503,9 +536,9 @@
   }
 
   const api = {
-    generateCube, generateCubeOne,
-    generate, generateOne, grade, solve, free, blocker, ownerGrid, bends, stepDir, fromStraight,
-    DR, DC, DZ, LEVELS, SHAPES, FLAT_LEVELS, movesFirst, improve,
+    generate, generateOne, generateCube, generateCubeOne, grade, movesFirst, improve,
+    solve, free, blocker, ownerGrid, bends, stepDirection, fromStraight, coordinatesOf,
+    ROW_STEP, COLUMN_STEP, LAYER_STEP, LEVELS, SHAPES, FLAT_LEVELS,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Arrows = api;
