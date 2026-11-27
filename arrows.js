@@ -34,16 +34,26 @@
     straight: { bends: 0, weights: [1, 4, 4], turn: 0 },
     bend1: { bends: 1, weights: [1, 3, 4, 4], turn: 0.7 },
     bend3: { bends: 3, weights: [1, 2, 3, 3, 3, 3], turn: 0.8 },
+    bend3short: { bends: 3, weights: [1, 4, 4, 3], turn: 0.85 },   // more pieces, so more in each other's way
   };
 
-  // Flat board levels: the piece shape, how many boards to deal (the hardest
-  // is kept), the lowest greed dealt, and whether greed goes for the longest
-  // must-go-first chain (`chains`) instead of the longest clear path.
+  // Flat board levels: the piece shape, how many boards to deal, the lowest
+  // greed dealt, what greed goes for (false: the longest clear path; 'moves':
+  // the most moves needed before the piece can go), what picks the hardest
+  // deal ('grade': grade() score; 'moves': movesFirst()), and how many arrow
+  // flips per square improve the pick afterwards (see improve()). The hardest
+  // deal is kept.
   const FLAT_LEVELS = {
-    easy: { shape: 'straight', deals: 12, minGreed: 0, chains: false },
-    medium: { shape: 'bend3', deals: 12, minGreed: 0, chains: false },
-    hard: { shape: 'bend3', deals: 150, minGreed: 0.6, chains: true },
+    easy: { shape: 'straight', deals: 12, minGreed: 0, chains: false, pick: 'grade', flips: 0 },
+    medium: { shape: 'bend3', deals: 12, minGreed: 0, chains: false, pick: 'grade', flips: 0 },
+    hard: { shape: 'bend3short', deals: 40, minGreed: 0.6, chains: 'moves', pick: 'moves', flips: 20 },
   };
+
+  function bitCount(bits) {
+    let count = 0;
+    for (let w of bits) for (; w; w &= w - 1) count++;
+    return count;
+  }
 
   function randInt(n) {
     return Math.floor(Math.random() * n);
@@ -219,26 +229,38 @@
     const pieces = new Array(paths.length);
     const options = paths.map((sq) => orientations(sq, n, depth));
     const chain = new Array(paths.length).fill(0);   // longest must-go-first chain ending at each piece
+    const words = (paths.length + 31) >> 5;
+    const before = paths.map(() => new Uint32Array(words));   // pieces that must go before each piece (bits)
     for (let left = paths.length; left; left--) {
-      const moves = [];   // [id, piece, path length, chain depth]
+      const moves = [];   // [id, piece, path length, chain depth, moves needed first]
       options.forEach((opts, id) => {
         if (off[id]) return;
         for (const p of opts) {
           const head = p.cells[0];
           let z = Math.floor(head / (n * n)) + DZ[p.dir];
           let r = Math.floor(head / n) % n + DR[p.dir], c = head % n + DC[p.dir], len = 0, clear = true, deep = 0;
+          const crossed = new Set();
           while (r >= 0 && r < n && c >= 0 && c < n && z >= 0 && z < depth) {
             const o = owner[(z * n + r) * n + c];
             if (o >= 0 && !off[o]) { clear = false; break; }
-            if (o >= 0) deep = Math.max(deep, chain[o]);
+            if (o >= 0) { deep = Math.max(deep, chain[o]); crossed.add(o); }
             r += DR[p.dir]; c += DC[p.dir]; z += DZ[p.dir]; len++;
           }
-          if (clear) moves.push([id, p, len, deep + 1]);
+          if (clear) {
+            // Every piece that must go before this one: those in its way, and theirs.
+            const need = new Uint32Array(words);
+            for (const o of crossed) {
+              need[o >> 5] |= 1 << (o & 31);
+              for (let w = 0; w < words; w++) need[w] |= before[o][w];
+            }
+            moves.push([id, p, len, deep + 1, bitCount(need), need]);
+          }
+          crossed.clear();
         }
       });
       if (!moves.length) return null;
       let m;
-      const key = chains ? 3 : 2;
+      const key = chains === 'moves' ? 4 : chains ? 3 : 2;
       if (Math.random() < greed) {
         const best = Math.max(...moves.map((x) => x[key]));
         const top = moves.filter((x) => x[key] === best);
@@ -248,9 +270,74 @@
       }
       pieces[m[0]] = m[1];
       chain[m[0]] = m[3];
+      before[m[0]] = m[5];
       off[m[0]] = true;
     }
     return { size: n, depth, pieces };
+  }
+
+  // How many moves each piece needs before it can go: every piece in its way,
+  // and every piece in their way, and so on. Returns the average over all
+  // pieces and the most for one piece. This is what Hard is built for.
+  function movesFirst(board) {
+    const n = board.size, depth = board.depth || 1, owner = ownerGrid(board);
+    const count = board.pieces.length, words = (count + 31) >> 5;
+    const direct = board.pieces.map((p) => {
+      const out = new Set(), head = p.cells[0];
+      let z = Math.floor(head / (n * n)) + DZ[p.dir];
+      let r = Math.floor(head / n) % n + DR[p.dir], c = head % n + DC[p.dir];
+      while (r >= 0 && r < n && c >= 0 && c < n && z >= 0 && z < depth) {
+        const o = owner[(z * n + r) * n + c];
+        if (o >= 0) out.add(o);
+        r += DR[p.dir]; c += DC[p.dir]; z += DZ[p.dir];
+      }
+      return out;
+    });
+    const memo = new Array(count);
+    const need = (id) => {
+      if (memo[id]) return memo[id];
+      const bits = new Uint32Array(words);
+      memo[id] = bits;   // (no loops on a solvable board)
+      for (const o of direct[id]) {
+        bits[o >> 5] |= 1 << (o & 31);
+        const theirs = need(o);
+        for (let w = 0; w < words; w++) bits[w] |= theirs[w];
+      }
+      return bits;
+    };
+    let sum = 0, most = 0;
+    for (let id = 0; id < count; id++) {
+      const k = bitCount(need(id));
+      sum += k;
+      most = Math.max(most, k);
+    }
+    return { avg: sum / count, most };
+  }
+
+  // Make a board harder: again and again, point one piece the other way (its
+  // other end becomes the head; a single square turns), and keep the change if
+  // the board can still be cleared and pieces need at least as many moves first.
+  function improve(board, tries) {
+    const n = board.size;
+    let best = movesFirst(board).avg;
+    for (let t = 0; t < tries; t++) {
+      const id = randInt(board.pieces.length), old = board.pieces[id];
+      let next;
+      if (old.cells.length === 1) {
+        const dirs = (board.depth > 1 ? [0, 1, 2, 3, 4, 5] : [0, 1, 2, 3]).filter((d) => d !== old.dir);
+        next = { cells: old.cells, dir: dirs[randInt(dirs.length)] };
+      } else {
+        const cells = old.cells.slice().reverse();
+        next = { cells, dir: stepDir(cells[1], cells[0], n) };
+      }
+      board.pieces[id] = next;
+      if (solve(board)) {
+        const score = movesFirst(board).avg;
+        if (score >= best) { best = score; continue; }
+      }
+      board.pieces[id] = old;
+    }
+    return board;
   }
 
   // Difficulty, by playing like a person who always takes the first free piece:
@@ -283,9 +370,11 @@
   }
 
   // Deal boards for a level (FLAT_LEVELS; 1 s budget, at least 3) with greed
-  // spread from its lowest to 1, and keep the hardest. Easy: straight pieces;
-  // Medium: up to 3 bends; Hard: the same shapes, built for long chains and
-  // the hardest of 150 deals.
+  // spread from its lowest to 1, and keep the hardest (Easy and Medium by
+  // grade(), Hard by movesFirst()). Easy: straight pieces; Medium: up to 3
+  // bends. Hard: shorter pieces with up to 3 bends, built so
+  // pieces need as many moves as possible before they can go, the hardest of
+  // 40 deals by that count, then improve()d.
   const POOL = 12, BUDGET_MS = 1000;
 
   function generate(n, level) {
@@ -298,10 +387,12 @@
       const b = generateOne(n, cfg.shape, greed, 1, cfg.chains);
       if (!b) continue;
       dealt++;
-      b.grade = grade(b);
-      if (!best || b.grade.score > best.grade.score) best = b;
+      b.score = cfg.pick === 'moves' ? movesFirst(b).avg : grade(b).score;
+      if (!best || b.score > best.score) best = b;
     }
     if (!best) throw new Error('Could not generate a puzzle');
+    if (cfg.flips) improve(best, cfg.flips * n * n);
+    best.grade = grade(best);
     return Object.assign(best, { level });
   }
 
@@ -368,7 +459,7 @@
   const api = {
     generateCube, generateCubeOne,
     generate, generateOne, grade, solve, free, blocker, ownerGrid, bends, stepDir, fromStraight,
-    DR, DC, DZ, LEVELS, SHAPES, FLAT_LEVELS,
+    DR, DC, DZ, LEVELS, SHAPES, FLAT_LEVELS, movesFirst, improve,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Arrows = api;
