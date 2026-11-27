@@ -1,7 +1,5 @@
 # To do
 
-Nothing planned right now. Ideas for later:
-
 ## Arrows
-- A "3 lives" mode: the game ends after three blocked taps.
-- 3D block structures (left out for now: hard to read and tap on a phone).
+- Make the flat (2D) board harder. Ideas: longer pieces and more bends on Hard, a harder pick
+  from the deals (more of them, or a stronger `grade()`), or a new Expert level.

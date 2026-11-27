@@ -13,13 +13,17 @@
 // board can be cleared exactly when no pieces block each other in a loop, and
 // then taking off any free piece, again and again, always clears it.
 //
-// generate(n, level) takes level 'easy' | 'medium' | 'hard'.
+// generate(n, level) takes level 'easy' | 'medium' | 'hard'. generateCube(n,
+// level) makes the 3D version: an n × n × n cube of single blocks (see below).
 
 (function (root) {
   'use strict';
 
-  const DR = [-1, 0, 1, 0];
-  const DC = [0, 1, 0, -1];
+  // Directions: 0 up, 1 right, 2 down, 3 left, and on the 3D cube also
+  // 4 front (towards the player at the start) and 5 back.
+  const DR = [-1, 0, 1, 0, 0, 0];
+  const DC = [0, 1, 0, -1, 0, 0];
+  const DZ = [0, 0, 0, 0, 1, -1];
   const LEVELS = ['easy', 'medium', 'hard'];
 
   // Per level: most bends in one piece, how likely each length is (weights for
@@ -45,7 +49,7 @@
   // Direction of the step from square a to its neighbour b.
   function stepDir(a, b, n) {
     const d = b - a;
-    return d === -n ? 0 : d === 1 ? 1 : d === n ? 2 : 3;
+    return d === -n ? 0 : d === 1 ? 1 : d === n ? 2 : d === -1 ? 3 : d === n * n ? 4 : 5;
   }
 
   // Number of bends along a piece's path.
@@ -64,9 +68,11 @@
     return { cells, dir: p.dir };
   }
 
-  // owner[square] = piece index, or -1 for an empty square.
+  // owner[square] = piece index, or -1 for an empty square. A 3D cube has
+  // `depth` = size layers; square index = (layer × size + row) × size + column,
+  // so a flat board (depth 1) is layer 0.
   function ownerGrid(board) {
-    const owner = new Int16Array(board.size * board.size).fill(-1);
+    const owner = new Int16Array(board.size * board.size * (board.depth || 1)).fill(-1);
     board.pieces.forEach((p, id) => { for (const i of p.cells) owner[i] = id; });
     return owner;
   }
@@ -74,13 +80,15 @@
   // First piece in the way of piece `id` (nearest its head), or -1 if its path
   // to the edge is clear. `removed[id]` marks pieces already off the board.
   function blocker(board, owner, removed, id) {
-    const n = board.size, p = board.pieces[id], head = p.cells[0];
-    let r = Math.floor(head / n) + DR[p.dir], c = head % n + DC[p.dir];
-    while (r >= 0 && r < n && c >= 0 && c < n) {
-      const o = owner[r * n + c];
+    const n = board.size, depth = board.depth || 1, p = board.pieces[id], head = p.cells[0];
+    let z = Math.floor(head / (n * n)) + DZ[p.dir];
+    let r = Math.floor(head / n) % n + DR[p.dir], c = head % n + DC[p.dir];
+    while (r >= 0 && r < n && c >= 0 && c < n && z >= 0 && z < depth) {
+      const o = owner[(z * n + r) * n + c];
       if (o >= 0 && !removed[o]) return o;
       r += DR[p.dir];
       c += DC[p.dir];
+      z += DZ[p.dir];
     }
     return -1;
   }
@@ -127,18 +135,21 @@
   // Split the grid into pieces: paths of squares that grow from a random
   // starting square, at either end, up to a random length and at most
   // `maxBends` bends. Returns a list of paths (end to end).
-  function tile(n, shape) {
-    const taken = new Uint8Array(n * n);
+  // On the cube (depth n) paths can also run between layers.
+  function tile(n, shape, depth = 1) {
+    const taken = new Uint8Array(n * n * depth);
     const paths = [];
     const neighbours = (i) => {
-      const r = Math.floor(i / n), c = i % n, out = [];
+      const z = Math.floor(i / (n * n)), r = Math.floor(i / n) % n, c = i % n, out = [];
       if (r > 0) out.push(i - n);
       if (c < n - 1) out.push(i + 1);
       if (r < n - 1) out.push(i + n);
       if (c > 0) out.push(i - 1);
+      if (z < depth - 1) out.push(i + n * n);
+      if (z > 0) out.push(i - n * n);
       return out;
     };
-    for (const start of shuffle([...Array(n * n).keys()])) {
+    for (const start of shuffle([...Array(n * n * depth).keys()])) {
       if (taken[start]) continue;
       const want = pickLength(shape.weights);
       const path = [start];
@@ -171,8 +182,8 @@
 
   // The ways a path can become a piece: either end can be the head, pointing
   // straight on (a single square can point any way).
-  function orientations(path, n) {
-    if (path.length === 1) return [0, 1, 2, 3].map((dir) => ({ cells: path.slice(), dir }));
+  function orientations(path, n, depth = 1) {
+    if (path.length === 1) return (depth > 1 ? [0, 1, 2, 3, 4, 5] : [0, 1, 2, 3]).map((dir) => ({ cells: path.slice(), dir }));
     const fwd = path.slice().reverse();   // head = last square of path
     return [
       { cells: fwd, dir: stepDir(fwd[1], fwd[0], n) },
@@ -188,24 +199,25 @@
   // `greed` (0–1) is how often the shape with the longest clear path is taken
   // instead of a random one; long paths over pieces that went first make more
   // pieces wait on others.
-  function generateOne(n, level, greed) {
-    const paths = tile(n, SHAPES[level] || SHAPES.easy);
-    const owner = new Int16Array(n * n).fill(-1);
+  function generateOne(n, level, greed, depth = 1) {
+    const paths = tile(n, SHAPES[level] || SHAPES.easy, depth);
+    const owner = new Int16Array(n * n * depth).fill(-1);
     paths.forEach((sq, id) => { for (const i of sq) owner[i] = id; });
     const off = new Array(paths.length).fill(false);
     const pieces = new Array(paths.length);
-    const options = paths.map((sq) => orientations(sq, n));
+    const options = paths.map((sq) => orientations(sq, n, depth));
     for (let left = paths.length; left; left--) {
       const moves = [];   // [id, piece, path length]
       options.forEach((opts, id) => {
         if (off[id]) return;
         for (const p of opts) {
           const head = p.cells[0];
-          let r = Math.floor(head / n) + DR[p.dir], c = head % n + DC[p.dir], len = 0, clear = true;
-          while (r >= 0 && r < n && c >= 0 && c < n) {
-            const o = owner[r * n + c];
+          let z = Math.floor(head / (n * n)) + DZ[p.dir];
+          let r = Math.floor(head / n) % n + DR[p.dir], c = head % n + DC[p.dir], len = 0, clear = true;
+          while (r >= 0 && r < n && c >= 0 && c < n && z >= 0 && z < depth) {
+            const o = owner[(z * n + r) * n + c];
             if (o >= 0 && !off[o]) { clear = false; break; }
-            r += DR[p.dir]; c += DC[p.dir]; len++;
+            r += DR[p.dir]; c += DC[p.dir]; z += DZ[p.dir]; len++;
           }
           if (clear) moves.push([id, p, len]);
         }
@@ -222,7 +234,7 @@
       pieces[m[0]] = m[1];
       off[m[0]] = true;
     }
-    return { size: n, pieces };
+    return { size: n, depth, pieces };
   }
 
   // Difficulty, by playing like a person who always takes the first free piece:
@@ -274,9 +286,70 @@
     return Object.assign(pool[pool.length - 1], { level });
   }
 
+  // ---------- 3D cube ----------
+  // An n × n × n cube. Easy: single blocks, each pointing one of 6 ways.
+  // Medium and Hard: pieces like the flat board's (up to 1 / 3 bends), which
+  // can also run between layers. Built the same way as the flat board: play
+  // forwards, again and again lifting off a piece that has a clear way out
+  // (single blocks never get stuck: one on the outside can leave through its
+  // own face; bent pieces rarely can, and then the deal is thrown away).
+  // Deals 12 (1 s budget, at least 3) with a spread of greed, ranks them by
+  // grade() and takes the easiest (Easy), the middle one (Medium) or the
+  // hardest (Hard).
+
+  function generateCubeOne(n, greed) {
+    const total = n * n * n;
+    const off = new Uint8Array(total);   // every square holds a block until lifted off
+    const pieces = new Array(total);
+    for (let left = total; left; left--) {
+      const moves = [];   // [square, dir, clear distance]
+      for (let i = 0; i < total; i++) {
+        if (off[i]) continue;
+        const z0 = Math.floor(i / (n * n)), r0 = Math.floor(i / n) % n, c0 = i % n;
+        for (let dir = 0; dir < 6; dir++) {
+          let z = z0 + DZ[dir], r = r0 + DR[dir], c = c0 + DC[dir], len = 0, clear = true;
+          while (r >= 0 && r < n && c >= 0 && c < n && z >= 0 && z < n) {
+            if (!off[(z * n + r) * n + c]) { clear = false; break; }
+            z += DZ[dir]; r += DR[dir]; c += DC[dir]; len++;
+          }
+          if (clear) moves.push([i, dir, len]);
+        }
+      }
+      let m;
+      if (Math.random() < greed) {
+        const best = Math.max(...moves.map((x) => x[2]));
+        const top = moves.filter((x) => x[2] === best);
+        m = top[randInt(top.length)];
+      } else {
+        m = moves[randInt(moves.length)];
+      }
+      pieces[m[0]] = { cells: [m[0]], dir: m[1] };
+      off[m[0]] = 1;
+    }
+    return { size: n, depth: n, pieces };
+  }
+
+  function generateCube(n, level) {
+    if (!LEVELS.includes(level)) level = 'medium';
+    const deadline = Date.now() + BUDGET_MS;
+    const pool = [];
+    for (let tries = 0; pool.length < POOL && (pool.length < 3 || Date.now() < deadline) && tries < 200; tries++) {
+      const greed = pool.length / (POOL - 1);
+      const b = level === 'easy' ? generateCubeOne(n, greed) : generateOne(n, level, greed, n);
+      if (!b) continue;
+      b.grade = grade(b);
+      pool.push(b);
+    }
+    if (!pool.length) throw new Error('Could not generate a puzzle');
+    pool.sort((a, b) => a.grade.score - b.grade.score);
+    const pick = level === 'easy' ? 0 : level === 'hard' ? pool.length - 1 : (pool.length - 1) >> 1;
+    return Object.assign(pool[pick], { level });
+  }
+
   const api = {
+    generateCube, generateCubeOne,
     generate, generateOne, grade, solve, free, blocker, ownerGrid, bends, stepDir, fromStraight,
-    DR, DC, LEVELS, SHAPES,
+    DR, DC, DZ, LEVELS, SHAPES,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.Arrows = api;

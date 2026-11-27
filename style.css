@@ -599,6 +599,73 @@ button:active { transform: scale(0.96); }
   .a-piece.shake-x, .a-piece.shake-y { animation: none; }
 }
 
+/* ----- 3D cube (arrows-cube.js) ----- */
+.a-board.cube { padding: 0; border-color: var(--line); overflow: hidden; }
+.a-scene {
+  --s: 30px;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  touch-action: none;   /* drags turn the cube instead of scrolling */
+  cursor: grab;
+  outline: none;
+}
+.a-scene:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+.a-cube, .a-piece3, .a-block {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  transform-style: preserve-3d;
+}
+.a-face {
+  position: absolute;
+  left: calc(var(--s) / -2);
+  top: calc(var(--s) / -2);
+  width: var(--s);
+  height: var(--s);
+  border-radius: calc(var(--s) * 0.16);
+  background: var(--a-tile);
+  color: var(--a-ink);
+  box-shadow: var(--edge, inset 0 0 0 1px color-mix(in srgb, var(--a-ink) 22%, transparent));
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  cursor: pointer;
+}
+/* A little shading, so the cube's sides read as sides. */
+.a-face0 { background: color-mix(in srgb, var(--a-tile) 88%, white); }
+.a-face2, .a-face5 { background: color-mix(in srgb, var(--a-tile) 85%, black); }
+.a-face1, .a-face3 { background: color-mix(in srgb, var(--a-tile) 93%, black); }
+.a-face svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-width: 0.13;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.a-face polyline { fill: none; }
+.a-face polygon { stroke-width: 0.05; }
+.a-piece3.gone { display: none; }
+.a-piece3.leaving { pointer-events: none; }
+.a-piece3.leaving .a-face { opacity: 0; transition: opacity 0.52s ease-in; }
+.a-piece3.hint .a-face { box-shadow: inset 0 0 0 3px var(--halo); }
+.a-piece3.blocking .a-face { animation: a-block-face 0.6s; }
+@keyframes a-block-face { 20%, 70% { background: var(--error); color: var(--error-bg); } }
+/* Shake along the piece's own direction (--vx, --vy, --vz). */
+.a-piece3.shake-3d { animation: a-shake-3d 0.15s 2; }
+@keyframes a-shake-3d {
+  25% { translate: calc(var(--vx) * -3px) calc(var(--vy) * -3px) calc(var(--vz) * -3px); }
+  75% { translate: calc(var(--vx) * 3px) calc(var(--vy) * 3px) calc(var(--vz) * 3px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .a-piece3.leaving .a-face { transition: none; }
+  .a-piece3.shake-3d { animation: none; }
+}
+
 /* ===================== Best times ===================== */
 
 /* Game buttons at the top: the same look as the main tab bar. */
@@ -672,7 +739,7 @@ button:active { transform: scale(0.96); }
   #scores-body { min-height: 0; }
   .scores th, .scores td { padding: 4px; }
   .scores .note { margin: 6px 0 0; }
-  #g-prefs-modal .prefs-groups, #a-prefs-modal .prefs-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #g-prefs-modal .prefs-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
 #sort-view .board-wrap {

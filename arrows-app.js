@@ -9,6 +9,7 @@
   const boardEl = document.getElementById('a-board');
   const sizeEl = document.getElementById('a-size');
   const levelEl = document.getElementById('a-level');
+  const shapeEl = document.getElementById('a-shape');
   const timerEl = document.getElementById('a-timer');
   const bestEl = document.getElementById('a-best');
   const mistakesEl = document.getElementById('a-mistakes');
@@ -19,8 +20,9 @@
 
   const state = {
     size: 0,
+    shape: 'flat',  // 'flat' board or 3D 'cube'
     level: 'medium',
-    pieces: [],     // { r, c, len, dir }, see arrows.js
+    pieces: [],     // { cells, dir }, see arrows.js
     removed: [],    // removed[id]: piece is off the board
     order: [],      // pieces in the order they were removed (for Undo)
     mistakes: 0,
@@ -29,12 +31,13 @@
   };
 
   let owner = null;   // owner[square] = piece id
-  let els = [];       // els[id] = the piece's button
+  let els = [];       // flat board: els[id] = the piece's group
   let hinted = -1;
+  let view = null;    // flatView or cubeView (same calls)
 
   const setMessage = GameMode.message(messageEl);
   const { buzz, formatTime } = GameMode;
-  const board = () => ({ size: state.size, pieces: state.pieces });
+  const board = () => ({ size: state.size, depth: state.shape === 'cube' ? state.size : 1, pieces: state.pieces });
 
   // ---------- Timer ----------
 
@@ -47,6 +50,7 @@
     try {
       localStorage.setItem(SAVE_KEY, JSON.stringify({
         size: state.size,
+        shape: state.shape,
         level: state.level,
         pieces: state.pieces,
         order: state.order,
@@ -72,12 +76,11 @@
       const removed = d.pieces.map(() => false);
       for (const id of d.order) removed[id] = true;
       Object.assign(state, {
-        size: d.size, level: d.level, pieces: d.pieces, removed, order: d.order,
+        size: d.size, shape: d.shape === 'cube' ? 'cube' : 'flat', level: d.level, pieces: d.pieces, removed, order: d.order,
         mistakes: d.mistakes || 0, finished: !!d.finished, hintsUsed: !!d.hintsUsed,
       });
       timer.reset(d.elapsed);
-      sizeEl.value = String(d.size);
-      levelEl.value = d.level;
+      showOptions();
       return true;
     } catch (e) {
       return false;
@@ -121,10 +124,10 @@
     return { points: points.map((xy) => xy.join(',')).join(' '), len, head: [hx, hy], u: [ux, uy], travel };
   }
 
-  function buildBoard() {
+  function buildFlat() {
     const n = state.size;
     boardEl.style.setProperty('--n', n);
-    owner = Arrows.ownerGrid(board());
+    boardEl.classList.remove('cube');
     const svg = svgEl('svg', { viewBox: `0 0 ${n} ${n}`, class: 'a-svg' });
     els = state.pieces.map((p, id) => {
       const g = geometry(p);
@@ -154,27 +157,47 @@
       return el;
     });
     boardEl.replaceChildren(svg);
-    hinted = -1;
   }
 
   // Put a piece back where it started (no animation: transitions only run while leaving).
-  function place(el, gone) {
+  function placeFlat(id, gone) {
+    const el = els[id];
     el.classList.remove('leaving', 'hint');
     el.classList.toggle('gone', gone);
     for (const pl of el.querySelectorAll('polyline')) pl.style.strokeDashoffset = pl.dataset.offset;
     el.querySelector('.a-head').style.transform = '';
   }
 
+  const flatView = {
+    build: buildFlat,
+    place: placeFlat,
+    refresh() {},
+    leave: leaveFlat,
+    el: (id) => els[id],
+    shakeClass: (id) => (state.pieces[id].dir % 2 ? 'shake-x' : 'shake-y'),
+  };
+  const cubeView = ArrowsCube.create(boardEl, { onTap: (id) => tap(id) });
+
+  function buildBoard() {
+    owner = Arrows.ownerGrid(board());
+    view = state.shape === 'cube' ? cubeView : flatView;
+    view.build(board());
+    hinted = -1;
+  }
+
   function render() {
-    els.forEach((el, id) => place(el, state.removed[id]));
+    state.pieces.forEach((p, id) => view.place(id, state.removed[id]));
+    view.refresh(state.removed);
     mistakesEl.textContent = `Mistakes: ${state.mistakes}`;
     boardEl.classList.toggle('solved', state.finished);
     timer.show();
     renderBest();
   }
 
+  // Best-time key: `size-level` on the flat board, `cube-size-level` in 3D.
   function scoreKey() {
-    return state.size ? `${state.size}-${state.level}` : `${sizeEl.value}-${levelEl.value}`;
+    const [shape, n, level] = state.size ? [state.shape, state.size, state.level] : [shapeEl.value, sizeEl.value, levelEl.value];
+    return `${shape === 'cube' ? 'cube-' : ''}${n}-${level}`;
   }
 
   function renderBest() {
@@ -183,7 +206,7 @@
   window.addEventListener('scoreschange', renderBest);
 
   function clearHint() {
-    if (hinted >= 0) els[hinted].classList.remove('hint');
+    if (hinted >= 0) view.el(hinted).classList.remove('hint');
     hinted = -1;
   }
 
@@ -192,11 +215,13 @@
   function newGame() {
     const n = Number(sizeEl.value);
     const level = levelEl.value;
+    const shape = shapeEl.value === 'cube' ? 'cube' : 'flat';
     setMessage('Generating…');
     setTimeout(() => {
-      const b = Arrows.generate(n, level);
+      const b = shape === 'cube' ? Arrows.generateCube(n, level) : Arrows.generate(n, level);
       Object.assign(state, {
         size: n,
+        shape,
         level,
         pieces: b.pieces,
         removed: b.pieces.map(() => false),
@@ -217,7 +242,7 @@
   const inProgress = () => !state.finished && (state.order.length > 0 || state.mistakes > 0);
 
   // Slide a piece off the board: head first, along its own path.
-  function slideOut(id) {
+  function leaveFlat(id) {
     const el = els[id], p = state.pieces[id];
     if (reducedMotion.matches) { el.classList.add('gone'); return; }
     const travel = Number(el.dataset.travel);
@@ -243,8 +268,8 @@
     if (b >= 0) {
       state.mistakes++;
       mistakesEl.textContent = `Mistakes: ${state.mistakes}`;
-      flash(els[id], state.pieces[id].dir % 2 ? 'shake-x' : 'shake-y');
-      flash(els[b], 'blocking');
+      flash(view.el(id), view.shakeClass(id));
+      flash(view.el(b), 'blocking');
       buzz(80);
       setMessage('Blocked! Something is in the way.', 'bad');
       save();
@@ -253,7 +278,8 @@
     clearHint();
     state.removed[id] = true;
     state.order.push(id);
-    slideOut(id);
+    view.leave(id);
+    view.refresh(state.removed);
     setMessage('');
     if (state.order.length === state.pieces.length) finish();
     save();
@@ -302,7 +328,7 @@
     state.hintsUsed = true;
     clearHint();
     hinted = f[Math.floor(Math.random() * f.length)];
-    els[hinted].classList.add('hint');
+    view.el(hinted).classList.add('hint');
     setMessage('This one can go.');
     save();
   }
@@ -331,9 +357,28 @@
   // Preferences pop-up: menu changes only take effect on "New puzzle"; Cancel puts them back.
   const prefsEl = document.getElementById('a-prefs-modal');
   const prefsBtn = document.getElementById('a-prefs');
+  // The size menu lists 5–10 for the flat board and 3–5 for the cube.
+  const SIZES = { flat: [5, 6, 7, 8, 9, 10], cube: [3, 4, 5] };
+  const DEFAULT_SIZE = { flat: 7, cube: 4 };
+  function sizeOptions(shape, value) {
+    const list = SIZES[shape];
+    if (!list.includes(Number(value))) value = DEFAULT_SIZE[shape];
+    sizeEl.replaceChildren(...list.map((k) => {
+      const o = document.createElement('option');
+      o.value = String(k);
+      o.textContent = shape === 'cube' ? `${k} × ${k} × ${k}` : `${k} × ${k}`;
+      return o;
+    }));
+    sizeEl.value = String(value);
+  }
+  shapeEl.addEventListener('change', () => sizeOptions(shapeEl.value, sizeEl.value));
+
+  // Set the menus to the current game's preferences.
   function showOptions() {
-    if (state.size) sizeEl.value = String(state.size);
-    if (state.size) levelEl.value = state.level;
+    if (!state.size) return;
+    shapeEl.value = state.shape;
+    sizeOptions(state.shape, state.size);
+    levelEl.value = state.level;
   }
   function cancelPrefs() {
     showOptions();
