@@ -451,7 +451,10 @@
   document.getElementById('s-restart').addEventListener('click', restart);
   document.getElementById('s-hint').addEventListener('click', hint);
 
-  const showRules = GameMode.popup(rulesEl, rulesBtn, document.getElementById('s-rules-close'));
+  // Focus the pop-up itself, so it opens at the top of the rules (and the version).
+  const rulesBox = rulesEl.querySelector('.rules');
+  rulesBox.tabIndex = -1;
+  const showRules = GameMode.popup(rulesEl, rulesBtn, rulesBox);
   rulesBtn.addEventListener('click', () => showRules(true));
   document.getElementById('s-rules-close').addEventListener('click', () => showRules(false));
   document.addEventListener('keydown', (e) => {

@@ -107,6 +107,8 @@
     const entry = { el, dismiss: null, inHistory: false };
     const show = (open) => {
       el.hidden = !open;
+      // Always open at the top, not wherever it was scrolled to last time.
+      if (open) for (const box of el.querySelectorAll('.rules')) box.scrollTop = 0;
       btn.setAttribute('aria-expanded', String(open));
       (open ? focusEl : btn).focus();
       if (open && !entry.inHistory) {
@@ -155,5 +157,10 @@
     });
   }
 
-  window.GameMode = { isActive, formatTime, timer, popup, message, buzz, whenShown };
+  // The app's version, shown in the corner of the rules pop-ups. The same
+  // number as CACHE in sw.js: bump both together.
+  const VERSION = 38;
+  document.querySelectorAll('.app-version').forEach((el) => { el.textContent = `v${VERSION}`; });
+
+  window.GameMode = { isActive, formatTime, timer, popup, message, buzz, whenShown, VERSION };
 })();
