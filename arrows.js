@@ -54,6 +54,12 @@
     hard: { shape: 'hard', deals: 40, minGreed: 0.6, chains: 'moves', pick: 'moves', flips: 20 },
   };
 
+  // Is square i off the outer ring of an n × n board (any layer)?
+  function insideRing(i, n) {
+    const r = Math.floor(i / n) % n, c = i % n;
+    return r > 0 && r < n - 1 && c > 0 && c < n - 1;
+  }
+
   function bitCount(bits) {
     let count = 0;
     for (let w of bits) for (; w; w &= w - 1) count++;
@@ -205,20 +211,18 @@
     }
 
     // A few long pieces first (`shape.long`: { count, min, max, bends } per
-    // board size n). Neither end of a long piece may be on the outer ring of
-    // the board, so it can't simply leave from the edge: grow it again (from
-    // another inside square) until both ends are inside and it is long enough.
-    const inside = (i) => {
-      const r = Math.floor(i / n) % n, c = i % n;
-      return r > 0 && r < n - 1 && c > 0 && c < n - 1;
-    };
+    // board size n). A long piece's head may not be on the outer ring of the
+    // board, so it can't simply leave from the edge: grow it again (from
+    // another inside square) until at least one end is inside and it is long
+    // enough. generateOne() then only points it with an inside end as the head.
+    const inside = (i) => insideRing(i, n);
     const long = shape.long ? shape.long(n) : null;
     for (let k = 0; long && k < long.count; k++) {
       const inner = [...Array(n * n * depth).keys()].filter((i) => inside(i) && !taken[i]);
       for (let attempt = 0; attempt < 200 && inner.length; attempt++) {
         const want = long.min + randInt(long.max - long.min + 1);
         const path = grow(inner[randInt(inner.length)], want, long.bends);
-        if (path.length >= long.min && inside(path[0]) && inside(path[path.length - 1])) {
+        if (path.length >= long.min && (inside(path[0]) || inside(path[path.length - 1]))) {
           paths.push(path);
           break;
         }
@@ -259,6 +263,11 @@
     const off = new Array(paths.length).fill(false);
     const pieces = new Array(paths.length);
     const options = paths.map((sq) => orientations(sq, n, depth));
+    // Long pieces (grown first, so ids 0 .. count − 1) keep their head off the outer ring.
+    const longCount = SHAPES[shape].long ? SHAPES[shape].long(n).count : 0;
+    for (let id = 0; id < longCount && id < options.length; id++) {
+      options[id] = options[id].filter((p) => insideRing(p.cells[0], n));
+    }
     const chain = new Array(paths.length).fill(0);   // longest must-go-first chain ending at each piece
     const words = (paths.length + 31) >> 5;
     const before = paths.map(() => new Uint32Array(words));   // pieces that must go before each piece (bits)
@@ -304,7 +313,7 @@
       before[m[0]] = m[5];
       off[m[0]] = true;
     }
-    return { size: n, depth, pieces };
+    return longCount ? { size: n, depth, pieces, longCount } : { size: n, depth, pieces };
   }
 
   // How many moves each piece needs before it can go: every piece in its way,
@@ -361,6 +370,7 @@
         const cells = old.cells.slice().reverse();
         next = { cells, dir: stepDir(cells[1], cells[0], n) };
       }
+      if (id < (board.longCount || 0) && !insideRing(next.cells[0], n)) continue;   // long heads stay inside
       board.pieces[id] = next;
       if (solve(board)) {
         const score = movesFirst(board).avg;

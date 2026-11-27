@@ -113,8 +113,9 @@ with `require()` for testing.
   closest of 40 deals is kept and flipped up towards that count if short). **Hard** is built for *moves needed first* (`movesFirst()`: for each piece, every piece
   in its way and in theirs, transitively; averaged): shape `hard` = shorter bent pieces (1–4 squares, up to
   3 bends, so more pieces get in each other's way) plus one long piece of N − 2 to N + 2 squares with up to
-  5 bends, grown first (`long` in `tile()`, regrown until neither end is on the board's outer ring; longer
-  pieces lower the count, so only one; it is always piece 0), greed 0.6–1 picking the move needing the most moves
+  5 bends, grown first (`long` in `tile()`, regrown until at least one end is off the board's outer ring;
+  `generateOne()` and `improve()` only give it a head off the ring, the tail may be on it; longer pieces
+  lower the count, so only one; it is always piece 0, and the board records `longCount`), greed 0.6–1 picking the move needing the most moves
   first (`chains: 'moves'`), the hardest of 40 deals by that count, then `improve()` flips pieces (other
   end as head) 20 × n² times, keeping flips that leave the board solvable and no easier. Roughly 2× Medium's
   moves-first count. History: Easy was the first Hard (straight); Medium was the Hard with up to 3 bends;
