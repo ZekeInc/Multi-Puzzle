@@ -35,6 +35,9 @@
     bend1: { bends: 1, weights: [1, 3, 4, 4], turn: 0.7 },
     bend3: { bends: 3, weights: [1, 2, 3, 3, 3, 3], turn: 0.8 },
     bend3short: { bends: 3, weights: [1, 4, 4, 3], turn: 0.85 },   // more pieces, so more in each other's way
+    // Hard: short pieces plus one long winding one, N − 2 to N + 2 squares on
+    // an N × N board with up to 5 bends.
+    hard: { bends: 3, weights: [1, 4, 4, 3], turn: 0.85, long: (n) => ({ count: 1, min: n - 2, max: n + 2, bends: 5 }) },
   };
 
   // Flat board levels: the piece shape, how many boards to deal, the lowest
@@ -48,7 +51,7 @@
   const FLAT_LEVELS = {
     easy: { shape: 'straight', deals: 12, minGreed: 0, chains: false, pick: 'grade', flips: 0 },
     medium: { shape: 'bend3', deals: 40, minGreed: 0, chains: 'moves', pick: 'moves', match: 'easy', flips: 20 },
-    hard: { shape: 'bend3short', deals: 40, minGreed: 0.6, chains: 'moves', pick: 'moves', flips: 20 },
+    hard: { shape: 'hard', deals: 40, minGreed: 0.6, chains: 'moves', pick: 'moves', flips: 20 },
   };
 
   function bitCount(bits) {
@@ -382,7 +385,8 @@
   // Deal boards for a level (FLAT_LEVELS; 1 s budget, at least 3) with greed
   // spread from its lowest to 1, and keep the hardest (Easy and Medium by
   // grade(), Hard by movesFirst()). Easy: straight pieces. Medium: up to 3
-  // bends, as many moves needed first as Easy (see `match`). Hard: shorter pieces with up to 3 bends, built so
+  // bends, as many moves needed first as Easy (see `match`). Hard: shorter pieces with up to 3 bends and one
+  // long one (N ± 2 squares, up to 5 bends), built so
   // pieces need as many moves as possible before they can go, the hardest of
   // 40 deals by that count, then improve()d.
   const POOL = 12, BUDGET_MS = 1000;

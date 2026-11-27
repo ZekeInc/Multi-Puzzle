@@ -111,8 +111,9 @@ with `require()` for testing.
   in `SHAPES`): **Easy** straight, 1–3 squares, the hardest of 12 deals by `grade()`. **Medium** up to 3 bends,
   1–6 squares, made to need as many moves first as Easy (`match: 'easy'`: two Easy boards are measured, the
   closest of 40 deals is kept and flipped up towards that count if short). **Hard** is built for *moves needed first* (`movesFirst()`: for each piece, every piece
-  in its way and in theirs, transitively; averaged): shorter bent pieces (`bend3short`, 1–4 squares, up to
-  3 bends, so more pieces get in each other's way), greed 0.6–1 picking the move needing the most moves
+  in its way and in theirs, transitively; averaged): shape `hard` = shorter bent pieces (1–4 squares, up to
+  3 bends, so more pieces get in each other's way) plus one long piece of N − 2 to N + 2 squares with up to
+  5 bends, grown first (`long` in `tile()`; longer pieces lower the count, so only one), greed 0.6–1 picking the move needing the most moves
   first (`chains: 'moves'`), the hardest of 40 deals by that count, then `improve()` flips pieces (other
   end as head) 20 × n² times, keeping flips that leave the board solvable and no easier. Roughly 2× Medium's
   moves-first count. History: Easy was the first Hard (straight); Medium was the Hard with up to 3 bends;
