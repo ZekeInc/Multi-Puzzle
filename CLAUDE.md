@@ -160,7 +160,11 @@ with `require()` for testing.
   the block in front; the head has the arrow head, or a dot on the face it leaves through. Sliding out is a
   Web Animations keyframe path per block (to the head, then straight on), all at the same speed, like a
   snake. Drag turns the cube (yaw / pitch, pitch clamped ±85°), a press that moves under 8 px is a tap;
-  arrow keys turn it too.
+  arrow keys turn it too. **Zoom**: two-finger pinch (around the point between the fingers; moving them pans),
+  mouse wheel, + / − / 0 keys; from 1 (whole cube) up to where a block is about 48 px (1.5×–4×). While a
+  pinch or wheel is under way the cube is stretched with `scale3d` (fast); when it ends `bake()` lays it out
+  again at the new size (`--s` = base × zoom), because a stretched 3D layer is blurry. A **Fit** button
+  (`.a-fit`) shows while zoomed in. A new puzzle starts at zoom 1.
   `arrows-app.js` talks to either view through the same calls (`build`, `place`, `refresh`, `leave`, `el`,
   `shakeClass`).
 - Preferences (⚙ `#a-prefs-modal`, same behaviour as Groups): **Board**, **Difficulty**, then **Size**
