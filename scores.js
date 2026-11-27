@@ -51,9 +51,17 @@
     },
     arrows: {
       title: 'Arrows',
-      fromSaved: true,   // keys `size-level`, like Groups
-      label: sizeLevelLabel,
-      order: sizeLevelOrder,
+      // Keys `size-level` like Groups; the 3D cube's are `cube-size-level`,
+      // listed after the flat ones.
+      fromSaved: true,
+      label(key) {
+        if (!key.startsWith('cube-')) return sizeLevelLabel(key);
+        const [n, level] = key.slice(5).split('-');
+        return `${n} × ${n} × ${n}, ${level[0].toUpperCase()}${level.slice(1)}`;
+      },
+      order(key) {
+        return key.startsWith('cube-') ? 1000 + sizeLevelOrder(key.slice(5)) : sizeLevelOrder(key);
+      },
     },
   };
 
