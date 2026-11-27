@@ -122,15 +122,21 @@ with `require()` for testing.
   greed spread 0–1, grades each (`grade()`: `layers` = longest must-go-first chain, `tight` = how few
   pieces are free each step; score = layers + 10 × tight) and keeps the hardest.
 - **3D cube** (Preferences → Board: Flat / 3D cube, `state.shape` `'flat'` | `'cube'`): an n × n × n cube
-  (3–5) of single blocks, each pointing one of 6 ways (4 = front, towards the player at the start; 5 = back).
-  The logic is shared: a board has `depth` (1 flat, n cube), square index = (layer × n + row) × n + column,
-  and `DR` / `DC` / `DZ` give each direction's step. `Arrows.generateCube(n, level)` plays forwards like the
-  flat generator, deals 12 and takes the easiest / middle / hardest by `grade()` score. Block id = its square.
-- `arrows-cube.js` draws the cube with CSS 3D transforms (`.a-scene` > `.a-cube` > `.a-block` > six
-  `.a-face`, `backface-visibility: hidden`); `--s` (square size = scene width / 2n) is set by a
-  `ResizeObserver`. A face is shown only when no block sits against it (`refresh()`). Faces parallel to a
-  block's direction show an arrow, the face it leaves through a dot, the face behind nothing. Drag turns the
-  cube (yaw / pitch, pitch clamped ±85°), a press that moves under 8 px is a tap; arrow keys turn it too.
+  (3–5). Directions add 4 = front (towards the player at the start) and 5 = back. **Easy**: single blocks
+  (`generateCubeOne`). **Medium / Hard**: the flat board's piece shapes (`SHAPES`, up to 1 / 3 bends), whose
+  paths can also run between layers (`tile()` / `generateOne()` take a `depth`). The logic is shared: a board
+  has `depth` (1 flat, n cube), square index = (layer × n + row) × n + column, and `DR` / `DC` / `DZ` give each
+  direction's step. `Arrows.generateCube(n, level)` deals 12 and takes the easiest (Easy), middle (Medium) or
+  hardest (Hard) by `grade()` score.
+- `arrows-cube.js` draws the cube with CSS 3D transforms (`.a-scene` > `.a-cube` > `.a-piece3` > one
+  `.a-block` per square > six `.a-face`, `backface-visibility: hidden`); `--s` (square size = scene width / 2n)
+  is set by a `ResizeObserver`. A face is shown only when nothing sits against it (`refresh()`), and has no
+  border or rounded corner on edges shared with the same piece (`--edge`), so a piece reads as one shape. Each
+  face draws the piece's path where it runs along that face (`faceArt()`): in from the block behind, out to
+  the block in front; the head has the arrow head, or a dot on the face it leaves through. Sliding out is a
+  Web Animations keyframe path per block (to the head, then straight on), all at the same speed, like a
+  snake. Drag turns the cube (yaw / pitch, pitch clamped ±85°), a press that moves under 8 px is a tap;
+  arrow keys turn it too.
   `arrows-app.js` talks to either view through the same calls (`build`, `place`, `refresh`, `leave`, `el`,
   `shakeClass`).
 - Preferences (⚙ `#a-prefs-modal`, same behaviour as Groups): **Board**, **Difficulty**, then **Size**

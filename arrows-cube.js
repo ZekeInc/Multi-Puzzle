@@ -1,20 +1,24 @@
-// The 3D view for Arrows: an n × n × n cube of blocks drawn with CSS 3D
-// transforms. Drag to turn the cube; tap a block to send it out.
+// The 3D view for Arrows: an n × n × n cube drawn with CSS 3D transforms.
+// Drag to turn the cube; tap a piece to send it out.
 //
 // ArrowsCube.create(boardEl, { onTap }) returns a view with the same calls as
 // the flat board's view in arrows-app.js: build(board), place(id, gone),
 // refresh(removed), leave(id), el(id), shakeClass(id).
 //
-// World axes are CSS's: x right, y down, z towards the player. A block in
-// square (layer z, row r, column c) sits at ((c, r, z) − (n − 1) / 2) × --s.
-// Each block has six faces; a face is only shown when no block sits against
-// it, so hidden faces cost nothing and can't flicker.
+// World axes are CSS's: x right, y down, z towards the player. Square
+// (layer z, row r, column c) sits at ((c, r, z) − (n − 1) / 2) × --s.
+// A piece is a `.a-piece3` holding one `.a-block` per square, each with six
+// faces. A face is only shown when nothing sits against it (so faces between
+// two blocks of the same piece are hidden too), and the edges a face shares
+// with the same piece's next block have no border, so the piece reads as one
+// shape. Each face shows the piece's path where it runs along that face; the
+// head block shows the arrow head (or a dot on the face it leaves through).
 (function () {
   'use strict';
 
   // Face k looks out in direction k (0 top, 1 right, 2 bottom, 3 left,
   // 4 front, 5 back). Its transform, and its own right (R) and down (D) axes
-  // in world terms, used to draw the block's arrow flat on that face.
+  // in world terms, used to draw on that face.
   const FACES = [
     { t: 'rotateX(90deg)', R: [1, 0, 0], D: [0, 0, 1] },
     { t: 'rotateY(90deg)', R: [0, 0, -1], D: [0, 1, 0] },
@@ -23,29 +27,76 @@
     { t: '', R: [1, 0, 0], D: [0, 1, 0] },
     { t: 'rotateY(180deg)', R: [-1, 0, 0], D: [0, 1, 0] },
   ];
-  const OPPOSITE = [2, 3, 0, 1, 5, 4];
   const NAMES = ['up', 'right', 'down', 'left', 'towards you', 'away from you'];
   const START = { yaw: -35, pitch: -25 };
+  const SLIDE_MS = 520;
 
   function create(boardEl, { onTap }) {
     const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-    let n = 0, blocks = [], faces = [], vec = [];
+    let n = 0, pieces = [], owner = null;
+    let pieceEls = [], blockEls = [], faceEls = [];   // [id], [id][k], [id][k][face]
     let yaw = START.yaw, pitch = START.pitch;
-    let scene = null, cube = null;
+    let scene = null, cube = null, sq = 30;
 
-    const dir3 = (d) => [Arrows.DC[d], Arrows.DR[d], Arrows.DZ[d]];
+    const vec = (d) => [Arrows.DC[d], Arrows.DR[d], Arrows.DZ[d]];
     const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    const coords = (i) => [i % n, Math.floor(i / n) % n, Math.floor(i / (n * n))];   // x, y, z
+    // Square next to square i in world direction v, or -1 off the cube.
+    function step(i, v) {
+      const [x, y, z] = coords(i);
+      const a = x + v[0], b = y + v[1], c = z + v[2];
+      return a < 0 || a >= n || b < 0 || b >= n || c < 0 || c >= n ? -1 : (c * n + b) * n + a;
+    }
 
-    // What a face shows: an arrow along the face when the block moves along
-    // it, a dot on the face it leaves through, nothing on the face behind.
-    function faceArt(dir, k) {
-      if (k === dir) return '<circle cx="0.5" cy="0.5" r="0.17"/>';
-      if (k === OPPOSITE[dir]) return '';
-      const v = dir3(dir);
-      const x = dot(v, FACES[k].R), y = dot(v, FACES[k].D);
-      const p = (along, side) => `${0.5 + x * along - y * side},${0.5 + y * along + x * side}`;
-      return `<line x1="${0.5 - x * 0.3}" y1="${0.5 - y * 0.3}" x2="${0.5 + x * 0.1}" y2="${0.5 + y * 0.1}"/>` +
-        `<polygon points="${p(0.36, 0)} ${p(0.02, 0.24)} ${p(0.02, -0.24)}"/>`;
+    // What face f of block k (0 = head) of piece p shows: the path through the
+    // block, flattened onto the face. It comes in from the block behind and
+    // goes out towards the block in front (or, for the head, out of the cube).
+    function faceArt(p, k, f) {
+      const len = p.cells.length;
+      const out = k === 0 ? p.dir : Arrows.stepDir(p.cells[k], p.cells[k - 1], n);
+      const inn = k === len - 1 ? -1 : Arrows.stepDir(p.cells[k + 1], p.cells[k], n);
+      const flat = (d) => [dot(vec(d), FACES[f].R), dot(vec(d), FACES[f].D)];
+      const pt = (v, t) => `${0.5 + v[0] * t},${0.5 + v[1] * t}`;
+      let art = '';
+      const line = (a, b) => { art += `<polyline points="${a} ${b}"/>`; };
+      const o = flat(out);
+      const along = o[0] || o[1];
+      if (inn >= 0) {
+        const v = flat(inn);
+        if (v[0] || v[1]) line(pt(v, -0.5), pt(v, 0));
+      } else if (along) {
+        line(pt(o, -0.3), pt(o, 0));   // the tail: a short stub behind the centre
+      }
+      if (k > 0) {
+        if (along) line(pt(o, 0), pt(o, 0.5));
+      } else if (along) {
+        const side = (a, s) => `${0.5 + o[0] * a - o[1] * s},${0.5 + o[1] * a + o[0] * s}`;
+        line(pt(o, 0), pt(o, 0.1));
+        art += `<polygon points="${side(0.36, 0)} ${side(0.02, 0.24)} ${side(0.02, -0.24)}"/>`;
+      } else if (f === p.dir) {
+        art += '<circle cx="0.5" cy="0.5" r="0.17"/>';
+      }
+      return art;
+    }
+
+    // Face corners and borders: none on an edge the face shares with another
+    // block of the same piece.
+    function faceEdges(id, i, f) {
+      const { R, D } = FACES[f];
+      const joined = (v) => { const j = step(i, v); return j >= 0 && owner[j] === id; };
+      const neg = (v) => v.map((x) => -x);
+      const [l, r, t, b] = [joined(neg(R)), joined(R), joined(neg(D)), joined(D)];
+      const line = 'color-mix(in srgb, var(--a-ink) 22%, transparent)';
+      const shadows = [];
+      if (!l) shadows.push(`inset 1px 0 0 ${line}`);
+      if (!r) shadows.push(`inset -1px 0 0 ${line}`);
+      if (!t) shadows.push(`inset 0 1px 0 ${line}`);
+      if (!b) shadows.push(`inset 0 -1px 0 ${line}`);
+      const rad = (a, c) => (a || c ? '0' : 'calc(var(--s) * 0.16)');
+      return {
+        borderRadius: `${rad(t, l)} ${rad(t, r)} ${rad(b, r)} ${rad(b, l)}`,
+        edge: shadows.join(', ') || 'none',
+      };
     }
 
     function turn() {
@@ -56,45 +107,65 @@
     function measure() {
       const w = scene.clientWidth;
       if (!w || !n) return;
-      scene.style.setProperty('--s', `${(w / (n * 2)).toFixed(2)}px`);
+      sq = w / (n * 2);
+      scene.style.setProperty('--s', `${sq.toFixed(2)}px`);
       scene.style.perspective = `${Math.round(w * 4)}px`;
     }
     const resize = new ResizeObserver(measure);
 
+    const mid = () => (n - 1) / 2;
+    const home = (i) => {
+      const [x, y, z] = coords(i).map((c) => c - mid());
+      return `translate3d(calc(var(--s) * ${x}), calc(var(--s) * ${y}), calc(var(--s) * ${z}))`;
+    };
+
     function build(board) {
       n = board.size;
+      pieces = board.pieces;
+      owner = Arrows.ownerGrid(board);
       yaw = START.yaw;
       pitch = START.pitch;
       scene = document.createElement('div');
       scene.className = 'a-scene';
       scene.tabIndex = 0;
-      scene.setAttribute('aria-label', 'Cube of arrow blocks. Drag to turn it, tap a block to send it.');
+      scene.setAttribute('aria-label', 'Cube of arrow pieces. Drag to turn it, tap a piece to send it.');
       cube = document.createElement('div');
       cube.className = 'a-cube';
       scene.appendChild(cube);
-      const mid = (n - 1) / 2;
-      vec = board.pieces.map((p) => dir3(p.dir));
-      faces = [];
-      blocks = board.pieces.map((p, id) => {
-        const i = p.cells[0];
-        const z = Math.floor(i / (n * n)), r = Math.floor(i / n) % n, c = i % n;
+      blockEls = [];
+      faceEls = [];
+      pieceEls = pieces.map((p, id) => {
         const el = document.createElement('div');
-        el.className = 'a-block';
+        el.className = 'a-piece3';
         el.dataset.id = id;
-        el.dataset.home = `translate3d(calc(var(--s) * ${c - mid}), calc(var(--s) * ${r - mid}), calc(var(--s) * ${z - mid}))`;
-        el.style.transform = el.dataset.home;
-        const [vx, vy, vz] = vec[id];
+        const [vx, vy, vz] = vec(p.dir);
         el.style.setProperty('--vx', vx);
         el.style.setProperty('--vy', vy);
         el.style.setProperty('--vz', vz);
-        el.setAttribute('aria-label', `Block pointing ${NAMES[p.dir]}, layer ${z + 1}, row ${r + 1}, column ${c + 1}`);
-        faces[id] = FACES.map((f, k) => {
-          const face = document.createElement('div');
-          face.className = `a-face a-face${k}`;
-          face.style.transform = `${f.t} translateZ(calc(var(--s) / 2))`;
-          face.innerHTML = `<svg viewBox="0 0 1 1" aria-hidden="true">${faceArt(p.dir, k)}</svg>`;
-          el.appendChild(face);
-          return face;
+        const [x, y, z] = coords(p.cells[0]);
+        const turns = Arrows.bends(p, n);
+        el.setAttribute('aria-label', `Arrow pointing ${NAMES[p.dir]}, head at layer ${z + 1}, row ${y + 1}, ` +
+          `column ${x + 1}, ${p.cells.length} block${p.cells.length > 1 ? 's' : ''}` +
+          (turns ? `, ${turns} bend${turns > 1 ? 's' : ''}` : ''));
+        blockEls[id] = [];
+        faceEls[id] = [];
+        p.cells.forEach((i, k) => {
+          const block = document.createElement('div');
+          block.className = 'a-block';
+          block.style.transform = home(i);
+          faceEls[id][k] = FACES.map((face, f) => {
+            const fe = document.createElement('div');
+            fe.className = `a-face a-face${f}`;
+            fe.style.transform = `${face.t} translateZ(calc(var(--s) / 2))`;
+            const { borderRadius, edge } = faceEdges(id, i, f);
+            fe.style.borderRadius = borderRadius;
+            fe.style.setProperty('--edge', edge);
+            fe.innerHTML = `<svg viewBox="0 0 1 1" aria-hidden="true">${faceArt(p, k, f)}</svg>`;
+            block.appendChild(fe);
+            return fe;
+          });
+          blockEls[id][k] = block;
+          el.appendChild(block);
         });
         cube.appendChild(el);
         return el;
@@ -110,50 +181,54 @@
 
     // Show only the faces with nothing against them.
     function refresh(removed) {
-      blocks.forEach((el, id) => {
+      pieces.forEach((p, id) => {
         if (removed[id]) return;
-        faces[id].forEach((face, k) => {
-          const nb = neighbour(id, k);
-          face.hidden = nb >= 0 && !removed[nb];
+        p.cells.forEach((i, k) => {
+          faceEls[id][k].forEach((fe, f) => {
+            const j = step(i, vec(f));
+            fe.hidden = j >= 0 && !removed[owner[j]];
+          });
         });
       });
     }
-    // Blocks fill every square, so a block's id is its square.
-    function neighbour(id, k) {
-      const z = Math.floor(id / (n * n)) + Arrows.DZ[k];
-      const r = Math.floor(id / n) % n + Arrows.DR[k];
-      const c = id % n + Arrows.DC[k];
-      return r < 0 || r >= n || c < 0 || c >= n || z < 0 || z >= n ? -1 : (z * n + r) * n + c;
-    }
 
     function place(id, gone) {
-      const el = blocks[id];
+      const el = pieceEls[id];
+      for (const a of el.getAnimations({ subtree: true })) a.cancel();
       el.classList.remove('leaving', 'hint');
       el.classList.toggle('gone', gone);
-      el.style.transform = el.dataset.home;
     }
 
-    // Fly out in the block's direction, far enough to leave the view.
+    // Slide out like a snake: every block follows the path to the head and
+    // then straight on out, all at the same speed, so the piece keeps its shape.
     function leave(id) {
-      const el = blocks[id];
+      const el = pieceEls[id], p = pieces[id];
       if (reducedMotion.matches) { el.classList.add('gone'); return; }
-      const [vx, vy, vz] = vec[id], d = n + 2;
+      const len = p.cells.length, out = n + 2, total = len - 1 + out;
+      const v = vec(p.dir), m = mid();
+      const at = (i) => coords(i).map((c) => (c - m) * sq);
+      const tf = (xyz) => `translate3d(${xyz[0]}px, ${xyz[1]}px, ${xyz[2]}px)`;
       el.classList.add('leaving');
-      el.getBoundingClientRect();
-      el.style.transform = `${el.dataset.home} translate3d(calc(var(--s) * ${vx * d}), calc(var(--s) * ${vy * d}), calc(var(--s) * ${vz * d}))`;
-      setTimeout(() => { if (el.classList.contains('leaving')) el.classList.add('gone'); }, 450);
+      p.cells.forEach((i, k) => {
+        const frames = [];
+        for (let j = k; j >= 0; j--) frames.push({ transform: tf(at(p.cells[j])), offset: (k - j) / total });
+        const head = at(p.cells[0]), rest = total - k;
+        frames.push({ transform: tf(head.map((c, a) => c + v[a] * rest * sq)), offset: 1 });
+        blockEls[id][k].animate(frames, { duration: SLIDE_MS, easing: 'ease-in', fill: 'forwards' });
+      });
+      setTimeout(() => { if (el.classList.contains('leaving')) el.classList.add('gone'); }, SLIDE_MS);
     }
 
     // ---------- Turning and tapping ----------
     // A press that moves more than a few pixels turns the cube; one that
-    // doesn't is a tap on the block under it.
+    // doesn't is a tap on the piece under it.
 
     let press = null;
     function listen() {
       scene.addEventListener('pointerdown', (e) => {
         if (e.pointerType === 'mouse' && e.button !== 0) return;
-        const block = e.target.closest('.a-block');
-        press = { x: e.clientX, y: e.clientY, yaw, pitch, id: block ? Number(block.dataset.id) : -1, moved: false };
+        const piece = e.target.closest('.a-piece3');
+        press = { x: e.clientX, y: e.clientY, yaw, pitch, id: piece ? Number(piece.dataset.id) : -1, moved: false };
         scene.setPointerCapture(e.pointerId);
       });
       scene.addEventListener('pointermove', (e) => {
@@ -175,11 +250,11 @@
       scene.addEventListener('pointercancel', end);
       // Keyboard: arrow keys turn the cube.
       scene.addEventListener('keydown', (e) => {
-        const step = { ArrowLeft: [-15, 0], ArrowRight: [15, 0], ArrowUp: [0, 15], ArrowDown: [0, -15] }[e.key];
-        if (!step) return;
+        const turnBy = { ArrowLeft: [-15, 0], ArrowRight: [15, 0], ArrowUp: [0, 15], ArrowDown: [0, -15] }[e.key];
+        if (!turnBy) return;
         e.preventDefault();
-        yaw += step[0];
-        pitch = Math.max(-85, Math.min(85, pitch + step[1]));
+        yaw += turnBy[0];
+        pitch = Math.max(-85, Math.min(85, pitch + turnBy[1]));
         turn();
       });
     }
@@ -189,7 +264,7 @@
       place,
       refresh,
       leave,
-      el: (id) => blocks[id],
+      el: (id) => pieceEls[id],
       shakeClass: () => 'shake-3d',
     };
   }
