@@ -103,11 +103,13 @@
       cube.style.transform = `rotateX(${pitch}deg) rotateY(${yaw}deg)`;
     }
 
-    // Square size: the turned cube (up to √3 × its side across) has to fit.
+    // Square size: the turned cube (up to √3 × its side across, a little more
+    // with perspective) has to fit at any angle. width / (n × 1.8) leaves about
+    // 5 px to spare at the worst angle (1.75 just touches the edge).
     function measure() {
       const w = scene.clientWidth;
       if (!w || !n) return;
-      sq = w / (n * 2);
+      sq = w / (n * 1.8);
       scene.style.setProperty('--s', `${sq.toFixed(2)}px`);
       scene.style.perspective = `${Math.round(w * 4)}px`;
     }

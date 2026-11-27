@@ -365,7 +365,7 @@
   const prefsEl = document.getElementById('a-prefs-modal');
   const prefsBtn = document.getElementById('a-prefs');
   // The size menu lists 5–10 for the flat board and 3–5 for the cube.
-  const SIZES = { flat: [5, 6, 7, 8, 9, 10], cube: [3, 4, 5] };
+  const SIZES = { flat: [5, 6, 7, 8, 9, 10], cube: [3, 4, 5, 6, 7, 8, 9, 10] };
   const DEFAULT_SIZE = { flat: 7, cube: 4 };
   function sizeOptions(shape, value) {
     const list = SIZES[shape];

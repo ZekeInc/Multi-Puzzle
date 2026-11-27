@@ -145,14 +145,15 @@ with `require()` for testing.
   score = layers + 10 × tight) and keeps the hardest. The score can't compare straight with bent boards
   (straight boards have more, smaller pieces, so longer chains), only boards of one shape.
 - **3D cube** (Preferences → Board: Flat / 3D cube, `state.shape` `'flat'` | `'cube'`): an n × n × n cube
-  (3–5). Directions add 4 = front (towards the player at the start) and 5 = back. **Easy**: single blocks
+  (3–10). Directions add 4 = front (towards the player at the start) and 5 = back. **Easy**: single blocks
   (`generateCubeOne`). **Medium / Hard**: piece shapes `bend1` / `bend3` (up to 1 / 3 bends), whose
   paths can also run between layers (`tile()` / `generateOne()` take a `depth`). The logic is shared: a board
   has `depth` (1 flat, n cube), square index = (layer × n + row) × n + column, and `DR` / `DC` / `DZ` give each
   direction's step. `Arrows.generateCube(n, level)` deals 12 and takes the easiest (Easy), middle (Medium) or
   hardest (Hard) by `grade()` score.
 - `arrows-cube.js` draws the cube with CSS 3D transforms (`.a-scene` > `.a-cube` > `.a-piece3` > one
-  `.a-block` per square > six `.a-face`, `backface-visibility: hidden`); `--s` (square size = scene width / 2n)
+  `.a-block` per square > six `.a-face`, `backface-visibility: hidden`); `--s` (square size = scene width / 1.8n, the largest that
+  never pokes out of the box at any angle)
   is set by a `ResizeObserver`. A face is shown only when nothing sits against it (`refresh()`), and has no
   border or rounded corner on edges shared with the same piece (`--edge`), so a piece reads as one shape. Each
   face draws the piece's path where it runs along that face (`faceArt()`): in from the block behind, out to
@@ -163,7 +164,7 @@ with `require()` for testing.
   `arrows-app.js` talks to either view through the same calls (`build`, `place`, `refresh`, `leave`, `el`,
   `shakeClass`).
 - Preferences (⚙ `#a-prefs-modal`, same behaviour as Groups): **Board**, **Difficulty**, then **Size**
-  (5–10 flat, 3–5 cube; the size menu is rebuilt when Board changes).
+  (5–10 flat, 3–10 cube; the size menu is rebuilt when Board changes).
   Saved game holds the pieces and `order` (pieces removed so far; Undo pops it). Saves from before bends
   (`{ r, c, len, dir }` pieces) load via `Arrows.fromStraight` if they were Hard (now Easy); old Easy and
   Medium games are dropped. Flat saves without `levels: 2` are from before the harder Hard: Hard loads as
