@@ -172,9 +172,17 @@
       if (z > 0) out.push(i - n * n);
       return out;
     };
-    for (const start of shuffle([...Array(n * n * depth).keys()])) {
+    // A few long pieces first (`shape.long`: { count, min, max, bends } per
+    // board size n), then the rest as usual.
+    const long = shape.long ? shape.long(n) : null;
+    const order = shuffle([...Array(n * n * depth).keys()]);
+    const starts = long ? [...order.slice(0, long.count), ...order] : order;
+    for (let k = 0; k < starts.length; k++) {
+      const start = starts[k];
       if (taken[start]) continue;
-      const want = pickLength(shape.weights);
+      const isLong = long && k < long.count;
+      const want = isLong ? long.min + randInt(long.max - long.min + 1) : pickLength(shape.weights);
+      const maxBends = isLong ? long.bends : shape.bends;
       const path = [start];
       taken[start] = 1;
       let turns = 0;
@@ -186,7 +194,7 @@
           for (const next of neighbours(end)) {
             if (taken[next]) continue;
             const turn = prev >= 0 && stepDir(prev, end, n) !== stepDir(end, next, n) ? 1 : 0;
-            if (turns + turn <= shape.bends) options.push([atEnd, next, turn]);
+            if (turns + turn <= maxBends) options.push([atEnd, next, turn]);
           }
         }
         if (!options.length) break;
