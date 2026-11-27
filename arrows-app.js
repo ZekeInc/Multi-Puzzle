@@ -403,7 +403,10 @@
   document.getElementById('a-undo').addEventListener('click', undo);
   document.getElementById('a-restart').addEventListener('click', restart);
   document.getElementById('a-hint').addEventListener('click', hint);
-  const showRules = GameMode.popup(rulesEl, rulesBtn, document.getElementById('a-rules-close'));
+  // Focus the pop-up itself, so it opens at the top of the rules (and the version).
+  const rulesBox = rulesEl.querySelector('.rules');
+  rulesBox.tabIndex = -1;
+  const showRules = GameMode.popup(rulesEl, rulesBtn, rulesBox);
   rulesBtn.addEventListener('click', () => showRules(true));
   document.getElementById('a-rules-close').addEventListener('click', () => showRules(false));
 

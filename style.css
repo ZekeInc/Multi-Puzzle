@@ -442,6 +442,17 @@ button:active { transform: scale(0.96); }
   box-shadow: 0 10px 30px rgb(0 0 0 / 0.25);
 }
 .rules h2 { margin: 0 0 8px; font-size: 1.2rem; }
+/* App version in the top right corner of the rules pop-ups. */
+.rules { position: relative; }
+.rules:focus { outline: none; }
+.app-version {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
 .rules p { margin: 8px 0; }
 .rules button {
   width: 100%;

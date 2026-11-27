@@ -28,14 +28,15 @@ with `require()` for testing.
 ## Conventions
 
 - **Cache busting:** when changing any CSS/JS file, bump its `?v=` number in `index.html` and
-  bump `CACHE` in `sw.js`, so installed copies pick up the change. If you add a file, add it to
+  bump the version (see Versions), which also names `CACHE` in `sw.js`, so installed copies pick up the change. If you add a file, add it to
   the `FILES` list in `sw.js` too.
 - **Each game** keeps its own state and saved progress in `localStorage`
   (`sudoku-save-v1`, `groups-save-v1`, `sort-save-v1`, `arrows-save-v1`). Its timer comes from
   `GameMode.timer(mode, el, canRun, save)` (`start`, `pause`, `reset(ms)`, `ms()`, `show()`), which
   pauses and saves when the game's tab is hidden or the app goes to the background; one shared
   tick redraws only the showing timer.
-- **Pop-ups** use `GameMode.popup(modal, openButton, focusEl, dismiss)`: Escape, tapping outside and the
+- **Pop-ups** use `GameMode.popup(modal, openButton, focusEl, dismiss)`; they always open scrolled to the top
+  (rules pop-ups focus the dialog itself, so they don't jump to "Got it"). Escape, tapping outside and the
   phone's back button (Android) call `dismiss` (default: close), and closing refocuses the opening button.
   Opening pushes a history entry that back pops (`popstate`); closing any other way calls `history.back()`
   to take it off again, so back with nothing open still leaves the app.
@@ -58,6 +59,15 @@ with `require()` for testing.
   `touch-action: pan-x pan-y` and `modes.js` cancels Safari's `gesturestart`. Keep `select`
   text at 16px or more, or iOS zooms in when a menu is tapped.
 - **Confirm before losing progress:** New, Restart, Clear and Solve ask first when a game is in progress.
+
+## Versions
+
+- The app's version is `major.minor`, shown as e.g. `v4.0` in the top right of the rules pop-ups
+  (`.app-version`, filled from `VERSION` in `modes.js`). `CACHE` in `sw.js` is `multi-puzzle-v<version>`:
+  always change both together.
+- **Major** (N.0): one more whenever a new game is added (4.0 = Sudoku, Groups, Sort, Arrows).
+- **Minor** (4.N): one more for any other release, however small. After 4.9 comes 4.10, then 4.11.
+- Bump once per release (pull request), not per commit.
 
 ## Groups game notes
 
