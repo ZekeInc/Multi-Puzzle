@@ -3,16 +3,18 @@
 (function () {
   'use strict';
 
-  const KEY = 'best-times-v1';
+  const STORAGE_KEY = 'best-times-v1';
+
+  const capitalise = (word) => word[0].toUpperCase() + word.slice(1);
 
   // Labels and order for `size-level` keys (Groups and Arrows).
   function sizeLevelLabel(key) {
-    const [n, level = 'random'] = key.split('-');
-    return `${n} × ${n}, ${level[0].toUpperCase()}${level.slice(1)}`;
+    const [size, level = 'random'] = key.split('-');
+    return `${size} × ${size}, ${capitalise(level)}`;
   }
   function sizeLevelOrder(key) {
-    const [n, level] = key.split('-');
-    return Number(n) * 10 + (level ? ['easy', 'medium', 'hard'].indexOf(level) + 1 : 0);
+    const [size, level] = key.split('-');
+    return Number(size) * 10 + (level ? ['easy', 'medium', 'hard'].indexOf(level) + 1 : 0);
   }
 
   const CATEGORIES = {
@@ -35,18 +37,16 @@
       fromSaved: true,
       label(key) {
         const parts = key.split('-');
-        const [c, e] = parts;
-        let i = 2;
-        let text = `${c} colours, ${e} extra`;
-        if (/^\d+$/.test(parts[i] || '')) {
-          text += `, ${parts[i]} per box, ${parts[i + 1]} empty`;
-          i += 2;
+        const [colours, extra] = parts;
+        let next = 2;
+        let text = `${colours} colours, ${extra} extra`;
+        if (/^\d+$/.test(parts[next] || '')) {
+          text += `, ${parts[next]} per box, ${parts[next + 1]} empty`;
+          next += 2;
         }
-        if (parts[i] === 'any') { text += ', any colour'; i++; }
+        if (parts[next] === 'any') { text += ', any colour'; next++; }
         // No level means Random (also every game from before levels existed).
-        const level = parts[i] || 'random';
-        text += `, ${level[0].toUpperCase()}${level.slice(1)}`;
-        return text;
+        return `${text}, ${capitalise(parts[next] || 'random')}`;
       },
     },
     arrows: {
@@ -56,8 +56,8 @@
       fromSaved: true,
       label(key) {
         if (!key.startsWith('cube-')) return sizeLevelLabel(key);
-        const [n, level] = key.slice(5).split('-');
-        return `${n} × ${n} × ${n}, ${level[0].toUpperCase()}${level.slice(1)}`;
+        const [size, level] = key.slice(5).split('-');
+        return `${size} × ${size} × ${size}, ${capitalise(level)}`;
       },
       order(key) {
         return key.startsWith('cube-') ? 1000 + sizeLevelOrder(key.slice(5)) : sizeLevelOrder(key);
@@ -65,54 +65,51 @@
     },
   };
 
+  // ---------- Storage ----------
+
+  function store(data) {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); } catch (e) { /* ignore */ }
+  }
+
   // Read from storage once and kept in memory: the games ask for their best
   // time on every redraw.
   let cache = null;
   function readAll() {
     if (!cache) {
-      try { cache = JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { cache = {}; }
-      if (!cache._arrowsBend) migrateArrows(cache);
-      if (!cache._arrowsHard2) migrateArrowsHard(cache);
+      try { cache = JSON.parse(localStorage.getItem(STORAGE_KEY)) || {}; } catch (e) { cache = {}; }
+      // When Arrows pieces learned to bend, the old (straight) Hard became Easy
+      // and the old Easy and Medium went away.
+      if (!cache._arrowsBend) moveArrowsLevel(cache, ['easy', 'medium', 'hard'], 'hard', 'easy', '_arrowsBend');
+      // When the flat board got a harder Hard, the old Hard became Medium and the
+      // old Medium (1 bend) went away. Cube keys (`cube-…`) are untouched.
+      if (!cache._arrowsHard2) moveArrowsLevel(cache, ['medium', 'hard'], 'hard', 'medium', '_arrowsHard2');
     }
     return cache;
   }
 
-  // When Arrows pieces learned to bend, the old (straight) Hard became Easy and
-  // the old Easy and Medium went away. Runs once; the marker isn't a game key.
-  function migrateArrows(data) {
+  // One-time move of flat Arrows best times after the levels changed: records of
+  // level `from` become `to`, other records of the `levels` listed are dropped.
+  // `marker` (not a game key) records that it ran.
+  function moveArrowsLevel(data, levels, from, to, marker) {
+    const pattern = new RegExp(`^arrows:(\\d+)-(${levels.join('|')})$`);
     const moved = {};
     for (const id of Object.keys(data)) {
-      const m = /^arrows:(\d+)-(easy|medium|hard)$/.exec(id);
-      if (!m) continue;
-      if (m[2] === 'hard') moved[`arrows:${m[1]}-easy`] = data[id];
+      const match = pattern.exec(id);
+      if (!match) continue;
+      if (match[2] === from) moved[`arrows:${match[1]}-${to}`] = data[id];
       delete data[id];
     }
     Object.assign(data, moved);
-    data._arrowsBend = 1;
-    try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) { /* ignore */ }
-  }
-
-  // When the flat board got a harder Hard, the old Hard became Medium and the
-  // old Medium (1 bend) went away. Runs once; cube keys (`cube-…`) are untouched.
-  function migrateArrowsHard(data) {
-    const moved = {};
-    for (const id of Object.keys(data)) {
-      const m = /^arrows:(\d+)-(medium|hard)$/.exec(id);
-      if (!m) continue;
-      if (m[2] === 'hard') moved[`arrows:${m[1]}-medium`] = data[id];
-      delete data[id];
-    }
-    Object.assign(data, moved);
-    data._arrowsHard2 = 1;
-    try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) { /* ignore */ }
+    data[marker] = 1;
+    store(data);
   }
 
   function writeAll(data) {
     cache = data;
-    try { localStorage.setItem(KEY, JSON.stringify(data)); } catch (e) { /* ignore */ }
+    store(data);
   }
   // Another tab of the app changed the best times.
-  window.addEventListener('storage', (e) => { if (e.key === KEY || e.key === null) cache = null; });
+  window.addEventListener('storage', (e) => { if (e.key === STORAGE_KEY || e.key === null) cache = null; });
 
   const formatTime = GameMode.formatTime;
 
@@ -151,82 +148,80 @@
   // ---------- "Best times" pop-up ----------
 
   const modal = document.getElementById('scores-modal');
-  const body = document.getElementById('scores-body');
-  const openBtn = document.getElementById('scores-open');
+  const bodyEl = document.getElementById('scores-body');
+  const openButton = document.getElementById('scores-open');
 
   // One game at a time; the buttons at the top pick which.
   const gameTabs = [...document.querySelectorAll('.scores-tabs [data-game]')];
   let shownGame = 'sudoku';
 
   function renderTable() {
-    const game = shownGame, cat = CATEGORIES[game];
+    const game = shownGame, category = CATEGORIES[game];
     gameTabs.forEach((tab) => {
-      const on = tab.dataset.game === game;
-      tab.setAttribute('aria-selected', String(on));
-      tab.tabIndex = on ? 0 : -1;
+      const selected = tab.dataset.game === game;
+      tab.setAttribute('aria-selected', String(selected));
+      tab.tabIndex = selected ? 0 : -1;
     });
-    body.setAttribute('aria-label', `${cat.title} best times`);
+    bodyEl.setAttribute('aria-label', `${category.title} best times`);
     const table = document.createElement('table');
     table.innerHTML = '<thead><tr><th scope="col"></th><th scope="col">Best time</th><th scope="col">Solved</th></tr></thead>';
     const tbody = document.createElement('tbody');
-    const keys = cat.fromSaved
+    const rows = category.fromSaved
       ? Object.keys(readAll())
         .filter((id) => id.startsWith(`${game}:`))
         .map((id) => id.slice(game.length + 1))
-        .sort(cat.order
-          ? (x, y) => cat.order(x) - cat.order(y)
+        .sort(category.order
+          ? (x, y) => category.order(x) - category.order(y)
           : (x, y) => x.localeCompare(y, undefined, { numeric: true }))
-        .map((key) => [key, cat.label(key)])
-      : cat.keys;
-    for (const [key, label] of keys) {
+        .map((key) => [key, category.label(key)])
+      : category.keys;
+    for (const [key, label] of rows) {
       const { best, solved } = get(game, key);
-      if (cat.fromSaved && !solved) continue;
-      const tr = document.createElement('tr');
-      const cells = [label, best === null ? '—' : formatTime(best), String(solved)];
-      cells.forEach((text, i) => {
-        const td = document.createElement(i === 0 ? 'th' : 'td');
-        if (i === 0) td.scope = 'row';
-        td.textContent = text;
-        tr.appendChild(td);
+      if (category.fromSaved && !solved) continue;
+      const rowEl = document.createElement('tr');
+      [label, best === null ? '—' : formatTime(best), String(solved)].forEach((text, column) => {
+        const cellEl = document.createElement(column === 0 ? 'th' : 'td');
+        if (column === 0) cellEl.scope = 'row';
+        cellEl.textContent = text;
+        rowEl.appendChild(cellEl);
       });
-      tbody.appendChild(tr);
+      tbody.appendChild(rowEl);
     }
     table.appendChild(tbody);
     if (!tbody.children.length) {
-      const p = document.createElement('p');
-      p.className = 'note';
-      p.textContent = `No ${cat.title} puzzles solved yet.`;
-      body.replaceChildren(p);
+      const noteEl = document.createElement('p');
+      noteEl.className = 'note';
+      noteEl.textContent = `No ${category.title} puzzles solved yet.`;
+      bodyEl.replaceChildren(noteEl);
     } else {
-      body.replaceChildren(table);
+      bodyEl.replaceChildren(table);
     }
   }
 
-  gameTabs.forEach((tab, i) => {
+  gameTabs.forEach((tab, index) => {
     tab.addEventListener('click', () => { shownGame = tab.dataset.game; renderTable(); });
     // Arrow keys move between the game buttons, like the main tab bar.
     tab.addEventListener('keydown', (e) => {
       const step = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
       if (!step) return;
-      const next = gameTabs[(i + step + gameTabs.length) % gameTabs.length];
+      const next = gameTabs[(index + step + gameTabs.length) % gameTabs.length];
       shownGame = next.dataset.game;
       renderTable();
       next.focus();
     });
   });
 
-  const closeBtn = document.getElementById('scores-close');
   // Focus goes to the game being shown, which keeps the pop-up scrolled to the top.
-  const selectedTab = { focus: () => gameTabs.find((t) => t.dataset.game === shownGame).focus() };
-  const show = GameMode.popup(modal, openBtn, selectedTab);
+  const selectedTab = { focus: () => gameTabs.find((tab) => tab.dataset.game === shownGame).focus() };
+  const show = GameMode.popup(modal, openButton, selectedTab);
 
-  openBtn.addEventListener('click', () => {
+  openButton.addEventListener('click', () => {
     // Open on the game being played.
     if (CATEGORIES[document.body.dataset.mode]) shownGame = document.body.dataset.mode;
     renderTable();
     show(true);
   });
-  closeBtn.addEventListener('click', () => show(false));
+  document.getElementById('scores-close').addEventListener('click', () => show(false));
   // Reset clears the best times of the game being shown.
   document.getElementById('scores-reset').addEventListener('click', () => {
     const title = CATEGORIES[shownGame].title;

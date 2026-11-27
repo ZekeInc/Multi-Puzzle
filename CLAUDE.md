@@ -12,7 +12,8 @@ Installable as a home-screen app and works offline.
 | `index.html` | All markup: tab bar, one `<section class="view">` per game, pop-ups (rules, best times, Groups, Sort and Arrows preferences) |
 | `style.css` | All styles. Theme colours are CSS variables on `:root` (light) and `:root[data-theme="dark"]` |
 | `theme.js` | Light/dark toggle. Dark is the default; an inline script in `<head>` applies the saved theme before the page draws |
-| `modes.js` | Tab switching (fires `modechange`; `GameMode.isActive('sudoku' \| 'groups' \| 'sort' \| 'arrows')`) and the pieces the games share: `GameMode.timer`, `popup`, `message`, `buzz`, `formatTime`, `whenShown` |
+| `modes.js` | Tab switching (fires `modechange`; `GameMode.isActive('sudoku' \| 'groups' \| 'sort' \| 'arrows')`) and the pieces the games share: `GameMode.timer`, `popup`, `rulesPopup`, `preferences`, `confirmNewGame`, `undoShortcut`, `message`, `buzz`, `formatTime`, `whenShown` |
+| `shared.js` | Helpers the logic files share (`Shared.randomInt`, `Shared.shuffle`); loaded before them in the page, `require()`d in Node |
 | `scores.js` | Best times per game and difficulty/size, plus the 🏆 Best times pop-up: a button per game at the top, one game shown at a time, opening on the game being played; Reset clears only the shown game (`Scores.record`, `Scores.bestLabel`, `Scores.verdict` = end of the win message). Kept in memory after the first read |
 | `sudoku.js` / `app.js` | Sudoku logic (generator, solver) / Sudoku UI |
 | `groups.js` / `groups-app.js` | Groups logic (unique-solution generator, difficulty grader) / Groups UI |
@@ -22,8 +23,8 @@ Installable as a home-screen app and works offline.
 | `TODO.md` | Planned work and ideas for later |
 | `manifest.webmanifest`, `icons/` | Home-screen install. `icon.svg` is the source (2 × 2: Sudoku, Groups / Sort, Arrows); PNGs are rendered from it with Playwright (`icon-maskable-512.png` has the art scaled to 88% for Android masks) |
 
-Logic files (`sudoku.js`, `groups.js`, `sort.js`, `arrows.js`) have no DOM code and can be loaded in Node
-with `require()` for testing.
+Logic files (`sudoku.js`, `groups.js`, `sort.js`, `arrows.js`, and `shared.js` which they use) have no
+DOM code and can be loaded in Node with `require()` for testing.
 
 ## Conventions
 
@@ -35,6 +36,14 @@ with `require()` for testing.
   `GameMode.timer(mode, el, canRun, save)` (`start`, `pause`, `reset(ms)`, `ms()`, `show()`), which
   pauses and saves when the game's tab is hidden or the app goes to the background; one shared
   tick redraws only the showing timer.
+- **Shared UI pieces:** Groups, Sort and Arrows wire up their pop-ups with `GameMode.rulesPopup(prefix)`
+  (`#<prefix>-rules-text`, `-rules`, `-rules-close`) and `GameMode.preferences(prefix, { focus, showOptions,
+  onOpen?, inProgress, newGame })` (`#<prefix>-prefs-modal`, `-prefs`, `-prefs-cancel`, `-prefs-apply`, `-new`),
+  which asks `GameMode.confirmNewGame(inProgress)` before throwing a game away. Ctrl+Z goes through
+  `GameMode.undoShortcut(mode, undo)`. Prefer these to copying wiring into a game.
+- **Names:** use whole words (`square`, `piece`, `size`, `row`, `column`, `previous`), not single letters,
+  except short loop counters and x / y / z coordinates. Saved-game fields keep their names (e.g. Arrows
+  pieces' `cells` / `dir`) so old saves still load.
 - **Pop-ups** use `GameMode.popup(modal, openButton, focusEl, dismiss)`; they always open scrolled to the top
   (rules pop-ups focus the dialog itself, so they don't jump to "Got it"). Escape, tapping outside and the
   phone's back button (Android) call `dismiss` (default: close), and closing refocuses the opening button.
@@ -148,8 +157,10 @@ with `require()` for testing.
   (3–10). Directions add 4 = front (towards the player at the start) and 5 = back. **Easy**: single blocks
   (`generateCubeOne`). **Medium / Hard**: piece shapes `bend1` / `bend3` (up to 1 / 3 bends), whose
   paths can also run between layers (`tile()` / `generateOne()` take a `depth`). The logic is shared: a board
-  has `depth` (1 flat, n cube), square index = (layer × n + row) × n + column, and `DR` / `DC` / `DZ` give each
-  direction's step. `Arrows.generateCube(n, level)` deals 12 and takes the easiest (Easy), middle (Medium) or
+  has `depth` (1 flat, n cube), square index = (layer × n + row) × n + column (`Arrows.coordinatesOf`), and
+  `ROW_STEP` / `COLUMN_STEP` / `LAYER_STEP` give each direction's step (`stepDirection(from, to, size)` is the
+  reverse). The squares straight ahead of a square (`squaresAhead`, from a `raysFor(size, depth)` table built
+  once per board shape) are what the blocking check, the generators and `movesFirst()` walk. `Arrows.generateCube(n, level)` deals 12 and takes the easiest (Easy), middle (Medium) or
   hardest (Hard) by `grade()` score.
 - `arrows-cube.js` draws the cube with CSS 3D transforms (`.a-scene` > `.a-cube` > `.a-piece3` > one
   `.a-block` per square > six `.a-face`, `backface-visibility: hidden`); `--s` (square size = scene width / 1.8n, the largest that
