@@ -36,7 +36,13 @@
     let n = 0, pieces = [], owner = null;
     let pieceEls = [], blockEls = [], faceEls = [];   // [id], [id][k], [id][k][face]
     let yaw = START.yaw, pitch = START.pitch;
-    let scene = null, cube = null, sq = 30;
+    // Zoom (1 = the whole cube fits) and pan in px from the scene's centre.
+    // `baked` is the zoom drawn into --s; the rest is a stretch, used only while a
+    // pinch or wheel is under way (stretching blurs, so it is baked in after).
+    let zoom = 1, baked = 1, panX = 0, panY = 0, fitBtn = null, bakeTimer = 0;
+    // base: square size with the whole cube in view; sq: the size the cube is
+    // laid out at now (base × the zoom baked in, see bake()).
+    let scene = null, cube = null, base = 30, sq = 30;
 
     const vec = (d) => [Arrows.DC[d], Arrows.DR[d], Arrows.DZ[d]];
     const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -99,8 +105,50 @@
       };
     }
 
+    // The cube's transform: pan, zoom (in all three axes, with the perspective
+    // scaled to match, so zooming in looks like moving closer), then the turn.
     function turn() {
-      cube.style.transform = `rotateX(${pitch}deg) rotateY(${yaw}deg)`;
+      const k = zoom / baked;
+      cube.style.transform = `translate3d(${panX}px, ${panY}px, 0) scale3d(${k}, ${k}, ${k}) ` +
+        `rotateX(${pitch}deg) rotateY(${yaw}deg)`;
+      if (scene) scene.style.perspective = `${Math.round(scene.clientWidth * 4 * zoom)}px`;
+      if (fitBtn) fitBtn.hidden = zoom <= 1.01;
+    }
+
+    // Zoom in up to where a block is about 48 px across (at least 1.5×, at most 4×).
+    const maxZoom = () => Math.max(1.5, Math.min(4, 48 / base));
+
+    // Lay the cube out at the current zoom, so it is drawn sharp.
+    function bake() {
+      clearTimeout(bakeTimer);
+      baked = zoom;
+      sq = base * zoom;
+      scene.style.setProperty('--s', `${sq.toFixed(2)}px`);
+      turn();
+    }
+    const bakeSoon = () => { clearTimeout(bakeTimer); bakeTimer = setTimeout(bake, 150); };
+
+    // Zoom to `z`, keeping the point (fx, fy) (px from the scene's centre) where it
+    // is on screen, then keep some of the cube in view.
+    function zoomTo(z, fx = 0, fy = 0) {
+      z = Math.max(1, Math.min(maxZoom(), z));
+      panX = fx - (fx - panX) * (z / zoom);
+      panY = fy - (fy - panY) * (z / zoom);
+      zoom = z;
+      clampPan();
+      turn();
+      bakeSoon();
+    }
+    function clampPan() {
+      if (zoom <= 1) { panX = panY = 0; return; }
+      const reach = 0.87 * n * base * zoom;   // about the turned cube's half width
+      panX = Math.max(-reach, Math.min(reach, panX));
+      panY = Math.max(-reach, Math.min(reach, panY));
+    }
+    // Point (px from the scene's centre) for a screen position.
+    function fromCentre(x, y) {
+      const r = scene.getBoundingClientRect();
+      return [x - r.left - r.width / 2, y - r.top - r.height / 2];
     }
 
     // Square size: the turned cube (up to √3 × its side across, a little more
@@ -109,9 +157,8 @@
     function measure() {
       const w = scene.clientWidth;
       if (!w || !n) return;
-      sq = w / (n * 1.8);
-      scene.style.setProperty('--s', `${sq.toFixed(2)}px`);
-      scene.style.perspective = `${Math.round(w * 4)}px`;
+      base = w / (n * 1.8);
+      bake();
     }
     const resize = new ResizeObserver(measure);
 
@@ -127,13 +174,22 @@
       owner = Arrows.ownerGrid(board);
       yaw = START.yaw;
       pitch = START.pitch;
+      zoom = baked = 1;
+      panX = panY = 0;
       scene = document.createElement('div');
       scene.className = 'a-scene';
       scene.tabIndex = 0;
-      scene.setAttribute('aria-label', 'Cube of arrow pieces. Drag to turn it, tap a piece to send it.');
+      scene.setAttribute('aria-label', 'Cube of arrow pieces. Drag to turn it, pinch to zoom, tap a piece to send it.');
       cube = document.createElement('div');
       cube.className = 'a-cube';
-      scene.appendChild(cube);
+      fitBtn = document.createElement('button');
+      fitBtn.className = 'a-fit';
+      fitBtn.textContent = 'Fit';
+      fitBtn.setAttribute('aria-label', 'Zoom out to the whole cube');
+      fitBtn.hidden = true;
+      fitBtn.addEventListener('pointerdown', (e) => e.stopPropagation());
+      fitBtn.addEventListener('click', () => { zoom = 1; panX = panY = 0; bake(); });
+      scene.append(cube, fitBtn);
       blockEls = [];
       faceEls = [];
       pieceEls = pieces.map((p, id) => {
@@ -221,19 +277,49 @@
       setTimeout(() => { if (el.classList.contains('leaving')) el.classList.add('gone'); }, SLIDE_MS);
     }
 
-    // ---------- Turning and tapping ----------
-    // A press that moves more than a few pixels turns the cube; one that
-    // doesn't is a tap on the piece under it.
+    // ---------- Turning, zooming and tapping ----------
+    // One finger: a press that moves more than a few pixels turns the cube; one
+    // that doesn't is a tap on the piece under it. Two fingers: pinch to zoom
+    // (around the point between them) and move them together to pan. Mouse
+    // wheel zooms too; keyboard: arrow keys turn, + / − zoom, 0 fits.
 
-    let press = null;
+    let press = null, pinch = null;
+    const fingers = new Map();   // pointerId → { x, y }
+
+    function startPinch() {
+      const [a, b] = [...fingers.values()];
+      const [mx, my] = fromCentre((a.x + b.x) / 2, (a.y + b.y) / 2);
+      pinch = { dist: Math.hypot(a.x - b.x, a.y - b.y) || 1, mx, my, zoom, panX, panY };
+    }
+
     function listen() {
       scene.addEventListener('pointerdown', (e) => {
         if (e.pointerType === 'mouse' && e.button !== 0) return;
-        const piece = e.target.closest('.a-piece3');
-        press = { x: e.clientX, y: e.clientY, yaw, pitch, id: piece ? Number(piece.dataset.id) : -1, moved: false };
+        fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
         scene.setPointerCapture(e.pointerId);
+        if (fingers.size === 1) {
+          const piece = e.target.closest('.a-piece3');
+          press = { x: e.clientX, y: e.clientY, yaw, pitch, id: piece ? Number(piece.dataset.id) : -1, moved: false };
+        } else if (fingers.size === 2) {
+          if (press) press.moved = true;   // a second finger means no tap
+          startPinch();
+        }
       });
       scene.addEventListener('pointermove', (e) => {
+        if (!fingers.has(e.pointerId)) return;
+        fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (fingers.size >= 2 && pinch) {
+          const [a, b] = [...fingers.values()];
+          const [mx, my] = fromCentre((a.x + b.x) / 2, (a.y + b.y) / 2);
+          const z = Math.max(1, Math.min(maxZoom(), pinch.zoom * Math.hypot(a.x - b.x, a.y - b.y) / pinch.dist));
+          // The point that was under the fingers stays under them.
+          panX = mx - (pinch.mx - pinch.panX) * (z / pinch.zoom);
+          panY = my - (pinch.my - pinch.panY) * (z / pinch.zoom);
+          zoom = z;
+          clampPan();
+          turn();
+          return;
+        }
         if (!press) return;
         const dx = e.clientX - press.x, dy = e.clientY - press.y;
         if (!press.moved && Math.hypot(dx, dy) < 8) return;
@@ -243,15 +329,32 @@
         turn();
       });
       const end = (e) => {
-        if (!press) return;
+        if (!fingers.delete(e.pointerId)) return;
+        if (fingers.size === 1) {
+          // Back to one finger after a pinch: it turns from here, never taps.
+          const [f] = fingers.values();
+          pinch = null;
+          bake();
+          press = { x: f.x, y: f.y, yaw, pitch, id: -1, moved: true };
+          return;
+        }
+        if (fingers.size > 1) { startPinch(); return; }
         const p = press;
-        press = null;
-        if (e.type === 'pointerup' && !p.moved && p.id >= 0) onTap(p.id);
+        if (pinch) bake();
+        press = pinch = null;
+        if (p && e.type === 'pointerup' && !p.moved && p.id >= 0) onTap(p.id);
       };
       scene.addEventListener('pointerup', end);
       scene.addEventListener('pointercancel', end);
-      // Keyboard: arrow keys turn the cube.
+      scene.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        const [fx, fy] = fromCentre(e.clientX, e.clientY);
+        zoomTo(zoom * Math.exp(-e.deltaY * 0.002), fx, fy);
+      }, { passive: false });
       scene.addEventListener('keydown', (e) => {
+        if (e.key === '+' || e.key === '=') { e.preventDefault(); zoomTo(zoom * 1.25); return; }
+        if (e.key === '-' || e.key === '_') { e.preventDefault(); zoomTo(zoom / 1.25); return; }
+        if (e.key === '0') { e.preventDefault(); zoomTo(1); bake(); return; }
         const turnBy = { ArrowLeft: [-15, 0], ArrowRight: [15, 0], ArrowUp: [0, 15], ArrowDown: [0, -15] }[e.key];
         if (!turnBy) return;
         e.preventDefault();

@@ -622,6 +622,18 @@ button:active { transform: scale(0.96); }
   outline: none;
 }
 .a-scene:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+/* Shown while zoomed in: back to the whole cube. */
+.a-fit {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 18px;
+  font-size: 0.9rem;
+  background: color-mix(in srgb, var(--surface) 85%, transparent);
+}
 .a-cube, .a-piece3, .a-block {
   position: absolute;
   left: 50%;
